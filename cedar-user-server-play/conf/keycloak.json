@@ -1,8 +1,0 @@
-{
-  "realm": "CEDAR",
-  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAle2xCXrRCTQSiEoD/GAd4BCtTiMQTzntXcsMVrCXgNsxyIOrBqtVAxXw+wFCPbkjWe0jrVVsfb+u/EjfKELGMI0B/iQ8rjH+ksrsBa/6py+t5O/Yz9GdcrLYVRCGsCOBc/VIN5QtcVDMSRikxoH5nwieVH8n6kcaj3DX+s55YnXMvqFCq5qhZtXZzY+Le/m/BPIMQu29e/1QBTaoTMIJnwAJnj5hHdhxHXtub255wHAt1eZaRKZFyf6ilXB3P653J4V38OT1dKqcug//E5wpiJVVOuvX+DbN++tIJx3e/Yzex1faYLSwscOparCl4ods5koZM0ENDp61s0fULBNLRQIDAQAB",
-  "auth-server-url": "https://auth.metadatacenter.orgx/auth",
-  "ssl-required": "all",
-  "resource": "cedar-angular-app",
-  "public-client": true
-}
