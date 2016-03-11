@@ -17,6 +17,11 @@
   <name>CEDAR User Server</name>
   <description>CEDAR server to handle user data</description>
 
+  <properties>
+    <!-- Do Not Remove This! We need it in Pom.scala -->
+    <scala.version>2.11.5</scala.version>
+  </properties>
+
   <modules>
     <module>cedar-user-server-core</module>
     <module>cedar-user-server-play</module>
