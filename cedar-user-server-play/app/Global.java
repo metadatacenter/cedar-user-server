@@ -60,6 +60,7 @@ public class Global extends GlobalSettings {
     } else {
       authResolver = new AuthorizationKeycloakAndApiKeyResolver();
     }
+    Authorization.setUserService(DataServices.getInstance().getUserService());
     Authorization.setAuthorizationResolver(authResolver);
     // onStart
     super.onStart(application);

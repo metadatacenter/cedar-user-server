@@ -1,6 +1,5 @@
 package utils;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import controllers.UserServerController;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.server.service.mongodb.UserServiceMongoDB;
@@ -13,7 +12,7 @@ import static org.metadatacenter.constant.ConfigConstants.USERS_COLLECTION_NAME;
 public class DataServices {
 
   private static DataServices instance = new DataServices();
-  public static UserService<String, String, JsonNode> userService;
+  private static UserService userService;
 
   public static DataServices getInstance() {
     return instance;
@@ -26,6 +25,9 @@ public class DataServices {
         config.getString(USERS_COLLECTION_NAME));
 
     UserServerController.injectUserService(userService);
+  }
 
+  public UserService getUserService() {
+    return userService;
   }
 }
