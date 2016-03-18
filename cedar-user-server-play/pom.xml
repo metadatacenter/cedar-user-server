@@ -120,7 +120,7 @@
         <groupId>com.google.code.play2-maven-plugin</groupId>
         <artifactId>play2-maven-plugin</artifactId>
         <configuration>
-          <httpPort>9004</httpPort>
+          <httpPort>9005</httpPort>
         </configuration>
       </plugin>
 
