@@ -2,14 +2,17 @@ package controllers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.keycloak.representations.AccessToken;
 import org.metadatacenter.constant.HttpConstants;
 import org.metadatacenter.server.security.Authorization;
 import org.metadatacenter.server.security.CedarAuthFromRequestFactory;
 import org.metadatacenter.server.security.CedarUserRolePermissionUtil;
+import org.metadatacenter.server.security.KeycloakUtils;
 import org.metadatacenter.server.security.exception.CedarUserNotFoundException;
+import org.metadatacenter.server.security.exception.InvalidOfflineAccessTokenException;
 import org.metadatacenter.server.security.model.IAuthRequest;
+import org.metadatacenter.server.security.model.auth.AuthorisedUser;
 import org.metadatacenter.server.security.model.auth.CedarPermission;
-import org.metadatacenter.server.security.model.auth.IAccountInfo;
 import org.metadatacenter.server.security.model.user.*;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.json.JsonUtils;
@@ -17,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Result;
 
+import java.io.IOException;
 import java.rmi.AccessException;
 import java.util.Date;
 import java.util.UUID;
@@ -35,9 +39,15 @@ public class UserServerController extends AbstractUserServerController {
       IAuthRequest frontendRequest = CedarAuthFromRequestFactory.fromRequest(request());
       Authorization.mustHavePermission(frontendRequest, CedarPermission.JUST_AUTHORIZED);
 
-      IAccountInfo ai = Authorization.getAccountInfo(frontendRequest);
+      AccessToken accessToken = null;
+      try {
+        accessToken = KeycloakUtils.parseToken(frontendRequest.getAuthString(), AccessToken.class);
+      } catch (IOException e) {
+        throw new InvalidOfflineAccessTokenException();
+      }
+      AuthorisedUser userFromToken = KeycloakUtils.getUserFromToken(accessToken);
 
-      CedarUser user = createUserFromBlueprint(ai.getId(), ai.getFirstName() + " " + ai.getLastName());
+      CedarUser user = createUserFromBlueprint(userFromToken.getId(), userFromToken.getFirstName() + " " + userFromToken.getLastName());
 
       CedarUser u = userService.createUser(user);
       CedarUserRolePermissionUtil.expandRolesIntoPermissions(u);
