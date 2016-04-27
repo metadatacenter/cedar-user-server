@@ -7,7 +7,8 @@ GET            /                              controllers.MainUserServerControll
 
 # Users
 POST           /users                         controllers.UserServerController.createUser()
-GET            /users/:id                     controllers.UserServerController.findUser(id: String)
+GET            /users/:id                     controllers.UserServerController.findOwnUser(id: String)
+GET            /users/:id/summary             controllers.UserServerController.findUserSummary(id: String)
 
 # For CORS - preflight request
 OPTIONS        /*all                          controllers.MainUserServerController.preflight(all)
