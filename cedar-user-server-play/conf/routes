@@ -3,15 +3,16 @@
 # ~~~~
 
 # Home page
-GET            /                              controllers.MainUserServerController.index()
+GET            /                         controllers.MainUserServerController.index()
 
 # Users
-POST           /users                         controllers.UserServerController.createUser()
-GET            /users/:id                     controllers.UserServerController.findOwnUser(id: String)
-GET            /users/:id/summary             controllers.UserServerController.findUserSummary(id: String)
+POST           /users                    controllers.UserServerController.createUser()
+GET            /users/:id                controllers.UserServerController.findOwnUser(id: String)
+GET            /users/:id/summary        controllers.UserServerController.findUserSummary(id: String)
+PUT            /users/:id                controllers.UserServerController.updateUser(id: String)
 
 # For CORS - preflight request
-OPTIONS        /*all                          controllers.MainUserServerController.preflight(all)
+OPTIONS        /*all                     controllers.MainUserServerController.preflight(all)
 
 ## Map static resources from the /public folder to the /assets URL path
-GET         /assets/*file                     controllers.Assets.at(path="/public", file)
+GET            /assets/*file             controllers.Assets.at(path="/public", file)
