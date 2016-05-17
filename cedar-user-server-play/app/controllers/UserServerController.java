@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.keycloak.adapters.jaas.AbstractKeycloakLoginModule;
 import org.keycloak.representations.AccessToken;
 import org.metadatacenter.constant.HttpConstants;
 import org.metadatacenter.server.security.Authorization;
@@ -42,7 +41,6 @@ public class UserServerController extends AbstractUserServerController {
   public static Result createUser() {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
-      Authorization.mustHavePermission(authRequest, CedarPermission.JUST_AUTHORIZED);
 
       AccessToken accessToken = null;
       try {
@@ -117,9 +115,7 @@ public class UserServerController extends AbstractUserServerController {
   public static Result findOwnUser(String id) {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
-      Authorization.mustHavePermission(authRequest, CedarPermission.USER_PROFILE_OWN_READ);
-
-      CedarUser currentUser = Authorization.getAccountInfo(authRequest);
+      CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.USER_PROFILE_OWN_READ);
 
       if (!id.equals(currentUser.getUserId())) {
         ObjectNode errorParams = JsonNodeFactory.instance.objectNode();
@@ -150,7 +146,7 @@ public class UserServerController extends AbstractUserServerController {
   public static Result findUserSummary(String id) {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
-      Authorization.mustHavePermission(authRequest, CedarPermission.JUST_AUTHORIZED);
+      Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.LOGGED_IN);
 
       CedarUser u = userService.findUser(id);
       if (u != null) {
@@ -173,9 +169,7 @@ public class UserServerController extends AbstractUserServerController {
   public static Result updateUser(String id) {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
-      Authorization.mustHavePermission(authRequest, CedarPermission.JUST_AUTHORIZED);
-
-      CedarUser currentUser = Authorization.getAccountInfo(authRequest);
+      CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.LOGGED_IN);
 
       if (!id.equals(currentUser.getUserId())) {
         ObjectNode errorParams = JsonNodeFactory.instance.objectNode();
