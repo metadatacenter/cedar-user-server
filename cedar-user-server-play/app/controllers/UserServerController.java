@@ -73,11 +73,9 @@ public class UserServerController extends AbstractUserServerController {
   }
 
   private static CedarUser createUserFromBlueprint(String id, String username) {
-    String homePath = "/Users/" + id;
     CedarUser user = new CedarUser();
     user.setUserId(id);
     user.setScreenName(username);
-    user.setHomePath(homePath);
 
     CedarUserApiKey apiKey = new CedarUserApiKey();
     apiKey.setKey(UUID.randomUUID().toString());
@@ -92,7 +90,6 @@ public class UserServerController extends AbstractUserServerController {
     user.getRoles().add(CedarUserRole.TEMPLATE_INSTANTIATOR);
 
     CedarUserUIFolderView folderView = user.getFolderView();
-    folderView.setCurrentPath(homePath);
     folderView.setSortBy("title");
     folderView.setSortDirection(SortOrder.ASC);
     folderView.setViewMode(ViewMode.GRID);
