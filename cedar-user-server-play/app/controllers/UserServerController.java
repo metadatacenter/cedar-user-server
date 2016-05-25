@@ -16,6 +16,7 @@ import org.metadatacenter.server.security.model.IAuthRequest;
 import org.metadatacenter.server.security.model.auth.AuthorisedUser;
 import org.metadatacenter.server.security.model.auth.CedarPermission;
 import org.metadatacenter.server.security.model.user.*;
+import org.metadatacenter.server.security.util.CedarUserUtil;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.mongo.MongoUtils;
 import org.slf4j.Logger;
@@ -50,7 +51,8 @@ public class UserServerController extends AbstractUserServerController {
       }
       AuthorisedUser userFromToken = KeycloakUtils.getUserFromToken(accessToken);
 
-      CedarUser user = createUserFromBlueprint(userFromToken.getId(), userFromToken.getFirstName() + " " + userFromToken.getLastName());
+      CedarUser user = CedarUserUtil.createUserFromBlueprint(userFromToken.getId(),
+          userFromToken.getFirstName() + " " + userFromToken.getLastName());
 
       CedarUser u = userService.createUser(user);
       CedarUserRolePermissionUtil.expandRolesIntoPermissions(u);
@@ -72,47 +74,12 @@ public class UserServerController extends AbstractUserServerController {
     }
   }
 
-  private static CedarUser createUserFromBlueprint(String id, String username) {
-    CedarUser user = new CedarUser();
-    user.setUserId(id);
-    user.setScreenName(username);
-
-    CedarUserApiKey apiKey = new CedarUserApiKey();
-    apiKey.setKey(UUID.randomUUID().toString());
-    apiKey.setCreationDate(new Date());
-    apiKey.setEnabled(true);
-    apiKey.setServiceName("CEDAR");
-    apiKey.setDescription("Auto-generated apiKey for CEDAR");
-
-    user.getApiKeys().add(apiKey);
-
-    user.getRoles().add(CedarUserRole.TEMPLATE_CREATOR);
-    user.getRoles().add(CedarUserRole.TEMPLATE_INSTANTIATOR);
-
-    CedarUserUIFolderView folderView = user.getFolderView();
-    folderView.setSortBy("title");
-    folderView.setSortDirection(SortOrder.ASC);
-    folderView.setViewMode(ViewMode.GRID);
-
-    CedarUserUIResourceTypeFilters resourceTypeFilters = user.getResourceTypeFilters();
-    resourceTypeFilters.setField(true);
-    resourceTypeFilters.setElement(true);
-    resourceTypeFilters.setTemplate(true);
-    resourceTypeFilters.setInstance(true);
-
-    CedarUserUIPopulateATemplate populateATemplate = user.getPopulateATemplate();
-    populateATemplate.setViewMode(ViewMode.GRID);
-    populateATemplate.setOpened(true);
-    populateATemplate.setSortBy("title");
-    populateATemplate.setSortDirection(SortOrder.ASC);
-    return user;
-  }
-
 
   public static Result findOwnUser(String id) {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
-      CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.USER_PROFILE_OWN_READ);
+      CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission
+          .USER_PROFILE_OWN_READ);
 
       if (!id.equals(currentUser.getUserId())) {
         ObjectNode errorParams = JsonNodeFactory.instance.objectNode();
