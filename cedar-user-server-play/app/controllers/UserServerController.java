@@ -79,7 +79,7 @@ public class UserServerController extends AbstractUserServerController {
     try {
       IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
       CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission
-          .USER_PROFILE_OWN_READ);
+          .LOGGED_IN);
 
       if (!id.equals(currentUser.getUserId())) {
         ObjectNode errorParams = JsonNodeFactory.instance.objectNode();
