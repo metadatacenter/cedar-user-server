@@ -16,6 +16,7 @@ import org.metadatacenter.server.security.model.IAuthRequest;
 import org.metadatacenter.server.security.model.auth.AuthorisedUser;
 import org.metadatacenter.server.security.model.auth.CedarPermission;
 import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserExtract;
 import org.metadatacenter.server.security.util.CedarUserUtil;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.json.JsonMapper;
@@ -50,9 +51,8 @@ public class UserServerController extends AbstractUserServerController {
       AuthorisedUser userFromToken = KeycloakUtils.getUserFromToken(accessToken);
 
       CedarConfig cedarConfig = DataServices.getCedarConfig();
-      CedarUser user = CedarUserUtil.createUserFromBlueprint(userFromToken.getId(),
-          userFromToken.getFirstName() + " " + userFromToken.getLastName(),
-          cedarConfig.getBlueprintUserProfile(), cedarConfig.getBlueprintUIPreferences());
+      CedarUserExtract cue = new CedarUserExtract(userFromToken.getId(), userFromToken.getFirstName(), userFromToken.getLastName());
+      CedarUser user = CedarUserUtil.createUserFromBlueprint(cue);
 
       CedarUser u = userService.createUser(user);
       CedarUserRolePermissionUtil.expandRolesIntoPermissions(u);
