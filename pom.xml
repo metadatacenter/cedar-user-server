@@ -6,14 +6,13 @@
   <parent>
     <groupId>org.metadatacenter</groupId>
     <artifactId>cedar-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.5.2</version>
   </parent>
 
   <groupId>org.metadatacenter</groupId>
   <artifactId>cedar-user-server</artifactId>
-  <version>0.1.0</version>
+  <version>0.5.2-SNAPSHOT</version>
   <packaging>pom</packaging>
-
   <name>CEDAR User Server</name>
   <description>CEDAR server to handle user data</description>
 
@@ -21,6 +20,12 @@
     <!-- Do Not Remove This! We need it in Pom.scala -->
     <scala.version>2.11.5</scala.version>
   </properties>
+
+  <scm>
+    <connection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</connection>
+    <developerConnection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</developerConnection>
+    <url>https://github.com/metadatacenter/cedar-user-server</url>
+  </scm>
 
   <modules>
     <module>cedar-user-server-core</module>

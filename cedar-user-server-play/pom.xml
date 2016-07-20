@@ -6,51 +6,64 @@
   <parent>
     <groupId>org.metadatacenter</groupId>
     <artifactId>cedar-user-server</artifactId>
-    <version>0.1.0</version>
+    <version>0.5.2-SNAPSHOT</version>
   </parent>
 
   <groupId>org.metadatacenter</groupId>
   <artifactId>cedar-user-server-play</artifactId>
-  <version>0.1.0</version>
   <packaging>play2</packaging>
-
   <name>CEDAR User Server Play</name>
 
+  <properties>
+
+    <cedar.version>0.5.2</cedar.version>
+
+  </properties>
+
   <dependencies>
+
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-server-utils-core</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-server-utils-play</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-auth-operations</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-auth-operations-noauth</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-auth-operations-keycloak</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-user-operations</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
       <artifactId>cedar-project-config</artifactId>
+      <version>${cedar.version}</version>
     </dependency>
+
 
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
