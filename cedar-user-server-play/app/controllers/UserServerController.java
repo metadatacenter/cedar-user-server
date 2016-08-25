@@ -51,7 +51,8 @@ public class UserServerController extends AbstractUserServerController {
       AuthorisedUser userFromToken = KeycloakUtils.getUserFromToken(accessToken);
 
       CedarConfig cedarConfig = DataServices.getCedarConfig();
-      CedarUserExtract cue = new CedarUserExtract(userFromToken.getId(), userFromToken.getFirstName(), userFromToken.getLastName());
+      CedarUserExtract cue = new CedarUserExtract(userFromToken.getId(), userFromToken.getFirstName(), userFromToken.getLastName(), null);
+      CedarUserUtil.fillScreenName(cue);
       CedarUser user = CedarUserUtil.createUserFromBlueprint(cue);
 
       CedarUser u = userService.createUser(user);
