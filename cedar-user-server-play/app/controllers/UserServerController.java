@@ -12,7 +12,7 @@ import org.metadatacenter.server.security.CedarUserRolePermissionUtil;
 import org.metadatacenter.server.security.KeycloakUtils;
 import org.metadatacenter.server.security.exception.CedarUserNotFoundException;
 import org.metadatacenter.server.security.exception.InvalidOfflineAccessTokenException;
-import org.metadatacenter.server.security.model.IAuthRequest;
+import org.metadatacenter.server.security.model.AuthRequest;
 import org.metadatacenter.server.security.model.auth.AuthorisedUser;
 import org.metadatacenter.server.security.model.auth.CedarPermission;
 import org.metadatacenter.server.security.model.user.CedarUser;
@@ -41,7 +41,7 @@ public class UserServerController extends AbstractUserServerController {
 
   public static Result createUser() {
     try {
-      IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
+      AuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
 
       AccessToken accessToken = null;
       try {
@@ -79,7 +79,7 @@ public class UserServerController extends AbstractUserServerController {
 
   public static Result findOwnUser(String id) {
     try {
-      IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
+      AuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
       CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission
           .LOGGED_IN);
 
@@ -111,7 +111,7 @@ public class UserServerController extends AbstractUserServerController {
 
   public static Result findUserSummary(String id) {
     try {
-      IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
+      AuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
       Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.LOGGED_IN);
 
       CedarUser u = userService.findUser(id);
@@ -134,7 +134,7 @@ public class UserServerController extends AbstractUserServerController {
 
   public static Result updateUser(String id) {
     try {
-      IAuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
+      AuthRequest authRequest = CedarAuthFromRequestFactory.fromRequest(request());
       CedarUser currentUser = Authorization.getUserAndEnsurePermission(authRequest, CedarPermission.LOGGED_IN);
 
       if (!id.equals(currentUser.getId())) {
