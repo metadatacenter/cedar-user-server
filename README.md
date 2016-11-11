@@ -1,5 +1,8 @@
 # cedar-user-server
+
 Backend services to support User profile handling
+
+[![Build Status](https://travis-ci.org/metadatacenter/cedar-user-server.svg?branch=master)](https://travis-ci.org/metadatacenter/cedar-user-server)
 
 #### Questions
 
