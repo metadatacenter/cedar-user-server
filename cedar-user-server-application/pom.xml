@@ -34,12 +34,12 @@
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
-      <artifactId>cedar-auth-operations-noauth</artifactId>
+      <artifactId>cedar-auth-operations-keycloak</artifactId>
     </dependency>
 
     <dependency>
       <groupId>org.metadatacenter</groupId>
-      <artifactId>cedar-auth-operations-keycloak</artifactId>
+      <artifactId>cedar-server-utils-dropwizard</artifactId>
     </dependency>
 
     <dependency>
