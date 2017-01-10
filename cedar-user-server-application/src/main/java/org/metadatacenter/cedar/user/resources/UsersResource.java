@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import org.metadatacenter.exception.CedarException;
+import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.rest.context.CedarRequestContextFactory;
-import org.metadatacenter.rest.exception.CedarAssertionException;
 import org.metadatacenter.server.security.CedarUserRolePermissionUtil;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.service.UserService;
@@ -53,7 +53,7 @@ public class UsersResource {
   @GET
   @Timed
   @Path("/{id}")
-  public Response findOwnUser(@PathParam("id") String id) throws CedarAssertionException {
+  public Response findOwnUser(@PathParam("id") String id) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
@@ -79,7 +79,7 @@ public class UsersResource {
   @GET
   @Timed
   @Path("/{id}/summary")
-  public Response findUserSummary(@PathParam("id") String id) throws CedarAssertionException {
+  public Response findUserSummary(@PathParam("id") String id) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
@@ -118,7 +118,7 @@ public class UsersResource {
     try {
       updatedUser = userService.updateUser(id, modifications);
     } catch (IOException | ProcessingException | InstanceNotFoundException e) {
-      throw new CedarAssertionException(e);
+      throw new CedarProcessingException(e);
     }
 
     CedarUserRolePermissionUtil.expandRolesIntoPermissions(updatedUser);
