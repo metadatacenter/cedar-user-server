@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
 import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 
 @Path("/users")
@@ -53,7 +54,7 @@ public class UsersResource {
   @GET
   @Timed
   @Path("/{id}")
-  public Response findOwnUser(@PathParam("id") String id) throws CedarException {
+  public Response findOwnUser(@PathParam(PP_ID) String id) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
@@ -79,7 +80,7 @@ public class UsersResource {
   @GET
   @Timed
   @Path("/{id}/summary")
-  public Response findUserSummary(@PathParam("id") String id) throws CedarException {
+  public Response findUserSummary(@PathParam(PP_ID) String id) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
@@ -96,7 +97,7 @@ public class UsersResource {
   @PUT
   @Timed
   @Path("/{id}")
-  public Response updateUser(@PathParam("id") String id) throws CedarException {
+  public Response updateUser(@PathParam(PP_ID) String id) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
