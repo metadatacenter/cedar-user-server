@@ -3,6 +3,7 @@ package org.metadatacenter.cedar.user;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.health.UserServerHealthCheck;
 import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
@@ -28,10 +29,10 @@ public class UserServerApplication extends Application<UserServerConfiguration> 
 
   @Override
   public void initialize(Bootstrap<UserServerConfiguration> bootstrap) {
+    cedarConfig = CedarConfig.getInstance();
+    CedarDataServices.getInstance(cedarConfig);
 
     CedarDropwizardApplicationUtil.setupKeycloak();
-
-    cedarConfig = CedarConfig.getInstance();
 
     userService = new UserServiceMongoDB(
         cedarConfig.getMongoConfig().getDatabaseName(),
@@ -45,7 +46,7 @@ public class UserServerApplication extends Application<UserServerConfiguration> 
     final IndexResource index = new IndexResource();
     environment.jersey().register(index);
 
-    final UsersResource users = new UsersResource();
+    final UsersResource users = new UsersResource(cedarConfig);
     environment.jersey().register(users);
 
     final UserServerHealthCheck healthCheck = new UserServerHealthCheck();

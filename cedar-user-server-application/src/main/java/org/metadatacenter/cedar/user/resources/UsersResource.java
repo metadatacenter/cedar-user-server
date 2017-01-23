@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
+import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.rest.context.CedarRequestContext;
@@ -44,7 +45,11 @@ public class UsersResource {
 
   private static UserService userService;
 
-  public UsersResource() {
+  protected final CedarConfig cedarConfig;
+
+
+  public UsersResource(CedarConfig cedarConfig) {
+    this.cedarConfig = cedarConfig;
   }
 
   public static void injectUserService(UserService us) {
@@ -90,7 +95,7 @@ public class UsersResource {
     JsonNode user = JsonMapper.MAPPER.valueToTree(currentUser);
     ObjectNode summary = JsonNodeFactory.instance.objectNode();
     summary.set("userId", user.get("id"));
-    summary.set("screenName", JsonNodeFactory.instance.textNode(CedarUserNameUtil.getDisplayName(currentUser)));
+    summary.set("screenName", JsonNodeFactory.instance.textNode(CedarUserNameUtil.getDisplayName(cedarConfig, currentUser)));
     return Response.ok().entity(summary).build();
   }
 
