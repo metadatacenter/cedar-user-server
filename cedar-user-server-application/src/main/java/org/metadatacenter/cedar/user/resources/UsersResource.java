@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import org.metadatacenter.config.CedarConfig;
+import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.rest.context.CedarRequestContext;
@@ -14,6 +15,7 @@ import org.metadatacenter.server.security.CedarUserRolePermissionUtil;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.CedarUserNameUtil;
+import org.metadatacenter.util.http.CedarResponse;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.mongo.MongoUtils;
 
@@ -67,12 +69,12 @@ public class UsersResource {
     CedarUser currentUser = c.getCedarUser();
 
     if (!id.equals(currentUser.getId())) {
-      Map<String, Object> errorParams = new HashMap<>();
-      errorParams.put("currentUserId", currentUser.getId());
-      errorParams.put("requestedUserId", id);
-      errorParams.put("errorId", "readOtherProfile");
-      errorParams.put("errorMessage", "You are not allowed to read other user's profile!");
-      return Response.status(Response.Status.FORBIDDEN).entity(errorParams).build();
+      return CedarResponse.forbidden()
+          .id(id)
+          .errorKey(CedarErrorKey.READ_OTHER_PROFILE_FORBIDDEN)
+          .errorMessage("You are not allowed to read other user's profile!")
+          .parameter("currentUserId", currentUser.getId())
+          .build();
     }
 
     JsonNode user = JsonMapper.MAPPER.valueToTree(currentUser);
@@ -95,7 +97,8 @@ public class UsersResource {
     JsonNode user = JsonMapper.MAPPER.valueToTree(currentUser);
     ObjectNode summary = JsonNodeFactory.instance.objectNode();
     summary.set("userId", user.get("id"));
-    summary.set("screenName", JsonNodeFactory.instance.textNode(CedarUserNameUtil.getDisplayName(cedarConfig, currentUser)));
+    summary.set("screenName", JsonNodeFactory.instance.textNode(CedarUserNameUtil.getDisplayName(cedarConfig,
+        currentUser)));
     return Response.ok().entity(summary).build();
   }
 
@@ -111,11 +114,13 @@ public class UsersResource {
 
     if (!id.equals(currentUser.getId())) {
       Map<String, Object> errorParams = new HashMap<>();
-      errorParams.put("currentUserId", currentUser.getId());
-      errorParams.put("requestedUserId", id);
-      errorParams.put("errorId", "updateOtherProfile");
-      errorParams.put("errorMessage", "You are not allowed to update other user's profile!");
-      return Response.status(Response.Status.FORBIDDEN).entity(errorParams).build();
+
+      return CedarResponse.forbidden()
+          .id(id)
+          .errorKey(CedarErrorKey.UPDATE_OTHER_PROFILE_FORBIDDEN)
+          .errorMessage("You are not allowed to update other user's profile!")
+          .parameter("currentUserId", currentUser.getId())
+          .build();
     }
 
     JsonNode modifications = c.request().getRequestBody().asJson();
@@ -123,7 +128,7 @@ public class UsersResource {
     CedarUser updatedUser = null;
     try {
       updatedUser = userService.updateUser(id, modifications);
-    } catch (IOException | ProcessingException | InstanceNotFoundException e) {
+    } catch (Exception e) {
       throw new CedarProcessingException(e);
     }
 
