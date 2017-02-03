@@ -34,9 +34,7 @@ public class UserServerApplication extends Application<UserServerConfiguration> 
 
     CedarDropwizardApplicationUtil.setupKeycloak();
 
-    userService = new UserServiceMongoDB(
-        cedarConfig.getMongoConfig().getDatabaseName(),
-        cedarConfig.getMongoCollectionName(CedarNodeType.USER));
+    userService = CedarDataServices.getUserService();
 
     UsersResource.injectUserService(userService);
   }
