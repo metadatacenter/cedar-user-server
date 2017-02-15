@@ -28,6 +28,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
@@ -92,13 +93,16 @@ public class UsersResource {
 
     c.must(c.user()).be(LoggedIn);
 
-    CedarUser currentUser = c.getCedarUser();
+    CedarUser lookupUser = null;
+    try {
+      lookupUser = userService.findUser(id);
+    } catch (Exception e) {
+      throw new CedarProcessingException(e);
+    }
 
-    JsonNode user = JsonMapper.MAPPER.valueToTree(currentUser);
-    ObjectNode summary = JsonNodeFactory.instance.objectNode();
-    summary.set("userId", user.get("id"));
-    summary.set("screenName", JsonNodeFactory.instance.textNode(CedarUserNameUtil.getDisplayName(cedarConfig,
-        currentUser)));
+    Map<String, String> summary = new HashMap<>();
+    summary.put("userId", lookupUser.getId());
+    summary.put("screenName", CedarUserNameUtil.getDisplayName(cedarConfig, lookupUser));
     return Response.ok().entity(summary).build();
   }
 
