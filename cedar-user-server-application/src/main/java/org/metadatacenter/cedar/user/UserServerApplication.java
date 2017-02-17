@@ -1,22 +1,13 @@
 package org.metadatacenter.cedar.user;
 
-import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.health.UserServerHealthCheck;
 import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
-import org.metadatacenter.cedar.util.dw.CedarDropwizardApplicationUtil;
-import org.metadatacenter.config.CedarConfig;
-import org.metadatacenter.model.CedarNodeType;
-import org.metadatacenter.server.service.UserService;
-import org.metadatacenter.server.service.mongodb.UserServiceMongoDB;
+import org.metadatacenter.cedar.util.dw.CedarMicroserviceApplication;
 
-public class UserServerApplication extends Application<UserServerConfiguration> {
-
-  protected static CedarConfig cedarConfig;
-  protected static UserService userService;
+public class UserServerApplication extends CedarMicroserviceApplication<UserServerConfiguration> {
 
   public static void main(String[] args) throws Exception {
     new UserServerApplication().run(args);
@@ -24,25 +15,16 @@ public class UserServerApplication extends Application<UserServerConfiguration> 
 
   @Override
   public String getName() {
-    return "user-server";
+    return "cedar-user-server";
   }
 
   @Override
-  public void initialize(Bootstrap<UserServerConfiguration> bootstrap) {
-    cedarConfig = CedarConfig.getInstance();
-    CedarDataServices.getInstance(cedarConfig);
-
-    CedarDropwizardApplicationUtil.setupKeycloak();
-
-    userService = new UserServiceMongoDB(
-        cedarConfig.getMongoConfig().getDatabaseName(),
-        cedarConfig.getMongoCollectionName(CedarNodeType.USER));
-
+  public void initializeApp(Bootstrap<UserServerConfiguration> bootstrap) {
     UsersResource.injectUserService(userService);
   }
 
   @Override
-  public void run(UserServerConfiguration configuration, Environment environment) {
+  public void runApp(UserServerConfiguration configuration, Environment environment) {
     final IndexResource index = new IndexResource();
     environment.jersey().register(index);
 
@@ -51,7 +33,5 @@ public class UserServerApplication extends Application<UserServerConfiguration> 
 
     final UserServerHealthCheck healthCheck = new UserServerHealthCheck();
     environment.healthChecks().register("message", healthCheck);
-
-    CedarDropwizardApplicationUtil.setupEnvironment(environment);
   }
 }
