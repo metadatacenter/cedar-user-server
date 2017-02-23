@@ -108,7 +108,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     JsonNode modifications = c.request().getRequestBody().asJson();
 
-    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.updateUser(id, modifications);
+    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.patchUser(id, modifications);
     if (cedarUserBackendCallResult.isError()) {
       return CedarResponse.from(cedarUserBackendCallResult);
     } else {
