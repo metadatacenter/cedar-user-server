@@ -1,6 +1,6 @@
 package org.metadatacenter.cedar.user;
 
-import io.dropwizard.Configuration;
+import org.metadatacenter.cedar.util.dw.CedarMicroserviceConfiguration;
 
-public class UserServerConfiguration extends Configuration {
+public class UserServerConfiguration extends CedarMicroserviceConfiguration {
 }
