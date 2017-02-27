@@ -14,7 +14,8 @@ notifications:
     - cedar-core-developers@lists.stanford.edu
     on_success: never
     on_failure: always
-install: '[ ${TRAVIS_PULL_REQUEST} = ''false'' ] && mvn -DskipTests=true clean deploy --settings .m2/travis-settings.xml'
+install: '[ ${TRAVIS_PULL_REQUEST} = ''false'' ] && mvn -DskipTests=false clean deploy --settings .m2/travis-settings.xml'
+script: '[ ${TRAVIS_PULL_REQUEST} = ''false'' ] && mvn -DskipTests=true clean --settings .m2/travis-settings.xml'
 env:
   global:
   - secure: Z1jNumBe6D/Qd5iLs3OPEZf6r+zwwPVmLVbmV1dGcfue92WczYZz5b9Mj1IRHHbdma4dwGg+z7edqT1a7IE9Z29aSWh/dcvt0NuJY6IjqjGvrhOEMSaRFoRLI0kCArMuwR2bLca7SuLRYn2kgG1d6RhRtwFYX07PY+w6/i8B2qChG1BHTFWC3N3a8monvX+ooOvXd85muRrmZxKq+r85SlPm4ddzu9KwhDeDsKibqe17xSZR3zgikDfV8tEWuIOpRYetSNDC7cPZSX/1MT86dOdAEXWJ5m4YlJgKeNy8AZ2IGW2QwTmYaad0n6ubY1p5MLrlSn3IWAP2P+nk9+f8Tl6eh/FYtGzHOUq0EYCPOY8ohZudae2iD7x70W0/uiV+7rkszMf+m9/QF4/J5jVascKwJumbQaWOhjB+mwJVzNGQdi4kCgl/X9NPf+5Nz3XmLdzFsTsbb/rc7fv+IvcRYMGF82scgObKM5AHLOTRiBzSf07vBElN6qbm9JTCZoXAvUqDatCYPv8XgTBotvr5V6Cg9hAsxO/DQCg/MNBavt6eeqfUTpXJikodAvSCPzm9jYXMjMS8VcOvYTwawLf1LtGFOKBKXUdOWSyUMOid08jzQlxHYvhdNjsB4RkZnMbJoPCNOBLY+MyUd6/InI83Yi+ynF4qOhefL4NzekzoBPc=
