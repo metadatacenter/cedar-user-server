@@ -9,7 +9,6 @@ import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.rest.context.CedarRequestContextFactory;
 import org.metadatacenter.server.result.BackendCallResult;
-import org.metadatacenter.server.security.CedarUserRolePermissionUtil;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.CedarUserNameUtil;
@@ -43,12 +42,14 @@ public class UsersResource extends AbstractUserServerResource {
   @GET
   @Timed
   @Path("/{id}")
-  public Response findOwnUser(@PathParam(PP_ID) String id) throws CedarException {
+  public Response findOwnUser(@PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
 
     CedarUser currentUser = c.getCedarUser();
+
+    String id = linkedDataUtil.getUserId(uuid);
 
     if (!id.equals(currentUser.getId())) {
       return CedarResponse.forbidden()
@@ -69,10 +70,12 @@ public class UsersResource extends AbstractUserServerResource {
   @GET
   @Timed
   @Path("/{id}/summary")
-  public Response findUserSummary(@PathParam(PP_ID) String id) throws CedarException {
+  public Response findUserSummary(@PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
+
+    String id = linkedDataUtil.getUserId(uuid);
 
     CedarUser lookupUser = null;
     try {
@@ -90,12 +93,14 @@ public class UsersResource extends AbstractUserServerResource {
   @PUT
   @Timed
   @Path("/{id}")
-  public Response updateUser(@PathParam(PP_ID) String id) throws CedarException {
+  public Response updateUser(@PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
 
     c.must(c.user()).be(LoggedIn);
 
     CedarUser currentUser = c.getCedarUser();
+
+    String id = linkedDataUtil.getUserId(uuid);
 
     if (!id.equals(currentUser.getId())) {
       return CedarResponse.forbidden()
