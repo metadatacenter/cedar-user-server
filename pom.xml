@@ -10,7 +10,7 @@
 
   <groupId>org.metadatacenter</groupId>
   <artifactId>cedar-user-server</artifactId>
-  <version>1.0.6-SNAPSHOT</version>
+  <version>1.0.6</version>
   <packaging>pom</packaging>
   <name>CEDAR User Server</name>
   <description>CEDAR server to handle user data</description>
@@ -19,7 +19,7 @@
     <connection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</connection>
     <developerConnection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</developerConnection>
     <url>https://github.com/metadatacenter/cedar-user-server</url>
-    <tag>HEAD</tag>
+    <tag>release-1.0.6</tag>
   </scm>
 
   <modules>
