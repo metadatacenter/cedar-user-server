@@ -1,11 +1,11 @@
 package org.metadatacenter.cedar.user;
 
-import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.metadatacenter.cedar.user.health.UserServerHealthCheck;
 import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
 import org.metadatacenter.cedar.util.dw.CedarMicroserviceApplication;
+import org.metadatacenter.model.ServerName;
 
 public class UserServerApplication extends CedarMicroserviceApplication<UserServerConfiguration> {
 
@@ -14,12 +14,12 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
   }
 
   @Override
-  public String getName() {
-    return "cedar-user-server";
+  protected ServerName getServerName() {
+    return ServerName.USER;
   }
 
   @Override
-  public void initializeApp(Bootstrap<UserServerConfiguration> bootstrap) {
+  public void initializeApp() {
     UsersResource.injectUserService(userService);
   }
 
@@ -34,4 +34,5 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
     final UserServerHealthCheck healthCheck = new UserServerHealthCheck();
     environment.healthChecks().register("message", healthCheck);
   }
+
 }
