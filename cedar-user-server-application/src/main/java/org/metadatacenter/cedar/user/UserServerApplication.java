@@ -1,5 +1,6 @@
 package org.metadatacenter.cedar.user;
 
+import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.metadatacenter.cedar.user.health.UserServerHealthCheck;
 import org.metadatacenter.cedar.user.resources.IndexResource;
@@ -16,6 +17,10 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
   @Override
   protected ServerName getServerName() {
     return ServerName.USER;
+  }
+
+  @Override
+  protected void initializeWithBootsrap(Bootstrap<UserServerConfiguration> bootstrap) {
   }
 
   @Override
