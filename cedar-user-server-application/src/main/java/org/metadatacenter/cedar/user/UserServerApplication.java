@@ -20,7 +20,7 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
   }
 
   @Override
-  protected void initializeWithBootsrap(Bootstrap<UserServerConfiguration> bootstrap) {
+  protected void initializeWithBootstrap(Bootstrap<UserServerConfiguration> bootstrap) {
   }
 
   @Override
