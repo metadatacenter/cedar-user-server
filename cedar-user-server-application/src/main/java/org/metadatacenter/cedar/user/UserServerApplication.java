@@ -6,6 +6,7 @@ import org.metadatacenter.cedar.user.health.UserServerHealthCheck;
 import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
 import org.metadatacenter.cedar.util.dw.CedarMicroserviceApplication;
+import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.model.ServerName;
 
 public class UserServerApplication extends CedarMicroserviceApplication<UserServerConfiguration> {
@@ -20,7 +21,7 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
   }
 
   @Override
-  protected void initializeWithBootstrap(Bootstrap<UserServerConfiguration> bootstrap) {
+  protected void initializeWithBootstrap(Bootstrap<UserServerConfiguration> bootstrap, CedarConfig cedarConfig) {
   }
 
   @Override
