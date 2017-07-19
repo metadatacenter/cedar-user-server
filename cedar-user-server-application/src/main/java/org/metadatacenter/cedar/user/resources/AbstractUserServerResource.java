@@ -6,11 +6,8 @@ import org.metadatacenter.server.jsonld.LinkedDataUtil;
 
 public class AbstractUserServerResource extends CedarMicroserviceResource {
 
-  protected final LinkedDataUtil linkedDataUtil;
-
   protected AbstractUserServerResource(CedarConfig cedarConfig) {
     super(cedarConfig);
-    linkedDataUtil = cedarConfig.getLinkedDataUtil();
   }
 
 }
