@@ -8,7 +8,7 @@
       <id>bmir</id>
 
       <repositories>
-        <snapshotRepository>
+        <repository>
           <id>bmir-nexus-snapshots</id>
           <url>https://nexus.bmir.stanford.edu/repository/snapshots</url>
         </repository>
