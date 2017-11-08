@@ -19,7 +19,6 @@
     <connection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</connection>
     <developerConnection>scm:git:git@github.com:metadatacenter/cedar-user-server.git</developerConnection>
     <url>https://github.com/metadatacenter/cedar-user-server</url>
-    <tag>release-1.3.2</tag>
   </scm>
 
   <modules>
