@@ -85,7 +85,7 @@ public class UsersResource extends AbstractUserServerResource {
     }
 
     Map<String, String> summary = new HashMap<>();
-    summary.put("userId", lookupUser.getId());
+    summary.put("userId", id);
     summary.put("screenName", CedarUserNameUtil.getDisplayName(cedarConfig, lookupUser));
     return Response.ok().entity(summary).build();
   }
