@@ -7,7 +7,6 @@ import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.rest.context.CedarRequestContext;
-import org.metadatacenter.rest.context.CedarRequestContextFactory;
 import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.service.UserService;
@@ -43,7 +42,7 @@ public class UsersResource extends AbstractUserServerResource {
   @Timed
   @Path("/{id}")
   public Response findOwnUser(@PathParam(PP_ID) String uuid) throws CedarException {
-    CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
+    CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
 
@@ -71,7 +70,7 @@ public class UsersResource extends AbstractUserServerResource {
   @Timed
   @Path("/{id}/summary")
   public Response findUserSummary(@PathParam(PP_ID) String uuid) throws CedarException {
-    CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
+    CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
 
@@ -94,7 +93,7 @@ public class UsersResource extends AbstractUserServerResource {
   @Timed
   @Path("/{id}")
   public Response updateUser(@PathParam(PP_ID) String uuid) throws CedarException {
-    CedarRequestContext c = CedarRequestContextFactory.fromRequest(request);
+    CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
 
