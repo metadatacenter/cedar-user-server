@@ -76,7 +76,7 @@ public class UsersResource extends AbstractUserServerResource {
     c.must(c.user()).be(LoggedIn);
 
     String id = linkedDataUtil.getUserId(uuid);
-    CedarUserId uid = CedarUserId.buildSafe(id);
+    CedarUserId uid = CedarUserId.build(id);
 
     CedarUser lookupUser = null;
     try {
