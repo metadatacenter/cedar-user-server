@@ -6,6 +6,7 @@ import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.exception.CedarProcessingException;
+import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.model.user.CedarUser;
@@ -75,10 +76,11 @@ public class UsersResource extends AbstractUserServerResource {
     c.must(c.user()).be(LoggedIn);
 
     String id = linkedDataUtil.getUserId(uuid);
+    CedarUserId uid = CedarUserId.build(id);
 
     CedarUser lookupUser = null;
     try {
-      lookupUser = userService.findUser(id);
+      lookupUser = userService.findUser(uid);
     } catch (Exception e) {
       throw new CedarProcessingException(e);
     }
@@ -112,7 +114,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     JsonNode modifications = c.request().getRequestBody().asJson();
 
-    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.patchUser(id, modifications);
+    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.patchUser(CedarUserId.build(id), modifications);
     if (cedarUserBackendCallResult.isError()) {
       return CedarResponse.from(cedarUserBackendCallResult);
     } else {
