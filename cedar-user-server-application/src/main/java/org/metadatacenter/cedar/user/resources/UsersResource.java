@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarException;
-import org.metadatacenter.exception.CedarProcessingException;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
@@ -78,12 +77,7 @@ public class UsersResource extends AbstractUserServerResource {
     String id = linkedDataUtil.getUserId(uuid);
     CedarUserId uid = CedarUserId.build(id);
 
-    CedarUser lookupUser = null;
-    try {
-      lookupUser = userService.findUser(uid);
-    } catch (Exception e) {
-      throw new CedarProcessingException(e);
-    }
+    CedarUser lookupUser = userService.findUser(uid);
 
     Map<String, String> summary = new HashMap<>();
     summary.put("userId", id);
