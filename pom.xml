@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.metadatacenter</groupId>
     <artifactId>cedar-parent</artifactId>
-    <version>2.5.30</version>
+    <version>2.5.32</version>
   </parent>
 
   <groupId>org.metadatacenter</groupId>
   <artifactId>cedar-user-server</artifactId>
-  <version>2.5.30</version>
+  <version>2.5.32</version>
   <packaging>pom</packaging>
   <name>CEDAR User Server</name>
   <description>CEDAR server to handle user information</description>
@@ -19,7 +19,7 @@
     <connection>scm:git:https://github.com/metadatacenter/cedar-user-server.git</connection>
     <developerConnection>scm:git:https://github.com/metadatacenter/cedar-user-server.git</developerConnection>
     <url>https://github.com/metadatacenter/cedar-user-server</url>
-    <tag>release-2.5.30</tag>
+    <tag>release-2.5.32</tag>
   </scm>
 
   <modules>
