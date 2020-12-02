@@ -12,6 +12,7 @@
   <artifactId>cedar-user-server</artifactId>
   <version>2.5.35-SNAPSHOT</version>
   <packaging>pom</packaging>
+
   <name>CEDAR User Server</name>
   <description>CEDAR server to handle user data</description>
 
