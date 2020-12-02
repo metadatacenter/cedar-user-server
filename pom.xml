@@ -10,7 +10,6 @@
 
   <groupId>org.metadatacenter</groupId>
   <artifactId>cedar-user-server</artifactId>
-  <version>2.5.36-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>CEDAR User Server</name>
