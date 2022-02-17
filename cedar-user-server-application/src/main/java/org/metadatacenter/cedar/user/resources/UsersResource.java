@@ -2,12 +2,18 @@ package org.metadatacenter.cedar.user.resources;
 
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.UserResource;
+import org.keycloak.representations.idm.FederatedIdentityRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
+import org.metadatacenter.server.security.KeycloakUtilInfo;
+import org.metadatacenter.server.security.KeycloakUtils;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.CedarUserNameUtil;
@@ -15,10 +21,16 @@ import org.metadatacenter.util.http.CedarResponse;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.mongo.MongoUtils;
 
-import javax.ws.rs.*;
+import javax.ws.rs.GET;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
@@ -29,9 +41,13 @@ import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 public class UsersResource extends AbstractUserServerResource {
 
   private static UserService userService;
+  private KeycloakUtilInfo kcInfo;
+  private Keycloak kc;
 
   public UsersResource(CedarConfig cedarConfig) {
     super(cedarConfig);
+    kcInfo = KeycloakUtils.initKeycloak(cedarConfig);
+    kc = KeycloakUtils.buildKeycloak(kcInfo);
   }
 
   public static void injectUserService(UserService us) {
@@ -78,10 +94,29 @@ public class UsersResource extends AbstractUserServerResource {
     CedarUserId uid = CedarUserId.build(id);
 
     CedarUser lookupUser = userService.findUser(uid);
+    UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
 
-    Map<String, String> summary = new HashMap<>();
+    UserRepresentation keyCloakUserRepresentation = userResource.toRepresentation();
+
+    Map<String, Object> summary = new HashMap<>();
     summary.put("userId", id);
     summary.put("screenName", CedarUserNameUtil.getDisplayName(cedarConfig, lookupUser));
+
+    if (keyCloakUserRepresentation.getFederatedIdentities() != null) {
+      List<Object> authenticationProviders = new ArrayList<>();
+
+      for (FederatedIdentityRepresentation federatedIdentityRepresentation : keyCloakUserRepresentation.getFederatedIdentities()) {
+        Map<String, String> authenticationProviderUserPair = new HashMap<>();
+        String authenticationProvider = federatedIdentityRepresentation.getIdentityProvider();
+        String userID = federatedIdentityRepresentation.getUserId();
+
+        authenticationProviderUserPair.put("name", authenticationProvider);
+        authenticationProviderUserPair.put("id", userID);
+        authenticationProviders.add(authenticationProviderUserPair);
+      }
+      summary.put("authenticationProvider", authenticationProviders);
+    }
+
     return Response.ok().entity(summary).build();
   }
 
