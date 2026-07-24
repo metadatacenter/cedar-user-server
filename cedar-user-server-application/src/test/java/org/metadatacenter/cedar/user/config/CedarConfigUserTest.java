@@ -39,6 +39,10 @@ public class CedarConfigUserTest {
     env.put(CedarEnvironmentVariable.CEDAR_USER_ADMIN_PORT.getName(), "9105");
     env.put(CedarEnvironmentVariable.CEDAR_USER_STOP_PORT.getName(), "9205");
 
+    env.put(CedarEnvironmentVariable.CEDAR_ADMIN_USER_PASSWORD.getName(), "password");
+    env.put(CedarEnvironmentVariable.CEDAR_TEST_USER1_ID.getName(), "https://metadatacenter.orgx/users/test-user-1");
+    env.put(CedarEnvironmentVariable.CEDAR_TEST_USER2_ID.getName(), "https://metadatacenter.orgx/users/test-user-2");
+
     TestUtil.setEnv(env);
   }
 
