@@ -15,19 +15,25 @@ import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.KeycloakUtilInfo;
 import org.metadatacenter.server.security.KeycloakUtils;
 import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserApiKey;
 import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.CedarUserNameUtil;
 import org.metadatacenter.util.http.CedarResponse;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.mongo.MongoUtils;
 
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +45,8 @@ import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 @Path("/users")
 @Produces(MediaType.APPLICATION_JSON)
 public class UsersResource extends AbstractUserServerResource {
+
+  private static final int MAX_API_KEYS = 20;
 
   private static UserService userService;
   private KeycloakUtilInfo kcInfo;
@@ -101,6 +109,8 @@ public class UsersResource extends AbstractUserServerResource {
     Map<String, Object> summary = new HashMap<>();
     summary.put("userId", id);
     summary.put("screenName", CedarUserNameUtil.getDisplayName(cedarConfig, lookupUser));
+    // Keycloak account creation time (epoch millis) - used as "Member since" on the profile page.
+    summary.put("createdTimestamp", keyCloakUserRepresentation.getCreatedTimestamp());
 
     if (keyCloakUserRepresentation.getFederatedIdentities() != null) {
       List<Object> authenticationProviders = new ArrayList<>();
@@ -155,5 +165,199 @@ public class UsersResource extends AbstractUserServerResource {
 
       return Response.ok().entity(updatedUserNode).build();
     }
+  }
+
+  /**
+   * Creates a new CEDAR API key for the current user.
+   * <p>
+   * The optional JSON body may carry a {@code description}; when it is missing or blank a default
+   * description carrying today's date is used. A user may hold up to {@link #MAX_API_KEYS} keys.
+   * <p>
+   * Self-only.
+   */
+  @POST
+  @Timed
+  @Path("/{id}/api-keys")
+  public Response createApiKey(@PathParam(PP_ID) String uuid) throws CedarException {
+    CedarRequestContext c = buildRequestContext();
+    c.must(c.user()).be(LoggedIn);
+
+    CedarUser currentUser = c.getCedarUser();
+    Response forbidden = forbiddenIfNotSelf(uuid, currentUser);
+    if (forbidden != null) {
+      return forbidden;
+    }
+
+    List<CedarUserApiKey> keys = currentUser.getApiKeys();
+    if (keys == null) {
+      keys = new ArrayList<>();
+      currentUser.setApiKeys(keys);
+    }
+    if (keys.size() >= MAX_API_KEYS) {
+      return CedarResponse.badRequest()
+          .errorKey(CedarErrorKey.INVALID_INPUT)
+          .errorMessage("You may have at most " + MAX_API_KEYS + " API keys. Delete one before creating another.")
+          .parameter("maxApiKeys", MAX_API_KEYS)
+          .build();
+    }
+
+    String description = null;
+    JsonNode body = c.request().getRequestBody().asJson();
+    if (body != null && body.hasNonNull("description")) {
+      String candidate = body.get("description").asText().trim();
+      if (!candidate.isEmpty()) {
+        description = candidate;
+      }
+    }
+    if (description == null) {
+      description = "API key created on " + LocalDate.now();
+    }
+
+    CedarUserApiKey newApiKey = new CedarUserApiKey();
+    newApiKey.setKey(generateRandomApiKey());
+    newApiKey.setServiceName("CEDAR");
+    newApiKey.setDescription(description);
+    newApiKey.setCreationDate(LocalDateTime.now());
+    newApiKey.setEnabled(true);
+    keys.add(newApiKey);
+
+    return persistAndRespond(currentUser);
+  }
+
+  /**
+   * Regenerates a single API key: the key identified by {@code key} in the path keeps its
+   * description / service name / enabled flag but gets a brand new, random value (and a fresh
+   * creation date), so the old value is immediately revoked. The key count is unchanged, so this
+   * is always safe - it is the way to "rotate" the last remaining key without dropping below one.
+   * <p>
+   * Self-only.
+   */
+  @POST
+  @Timed
+  @Path("/{id}/api-keys/{key}/regenerate")
+  public Response regenerateApiKey(@PathParam(PP_ID) String uuid, @PathParam("key") String key) throws CedarException {
+    CedarRequestContext c = buildRequestContext();
+    c.must(c.user()).be(LoggedIn);
+
+    CedarUser currentUser = c.getCedarUser();
+    Response forbidden = forbiddenIfNotSelf(uuid, currentUser);
+    if (forbidden != null) {
+      return forbidden;
+    }
+
+    CedarUserApiKey target = findApiKey(currentUser, key);
+    if (target == null) {
+      return apiKeyNotFound(key);
+    }
+
+    target.setKey(generateRandomApiKey());
+    target.setCreationDate(LocalDateTime.now());
+
+    return persistAndRespond(currentUser);
+  }
+
+  /**
+   * Deletes a single API key. Refused when it would leave the user with no enabled key: a user must
+   * always keep at least one active key (regenerate it instead of deleting the last one).
+   * <p>
+   * Self-only.
+   */
+  @DELETE
+  @Timed
+  @Path("/{id}/api-keys/{key}")
+  public Response deleteApiKey(@PathParam(PP_ID) String uuid, @PathParam("key") String key) throws CedarException {
+    CedarRequestContext c = buildRequestContext();
+    c.must(c.user()).be(LoggedIn);
+
+    CedarUser currentUser = c.getCedarUser();
+    Response forbidden = forbiddenIfNotSelf(uuid, currentUser);
+    if (forbidden != null) {
+      return forbidden;
+    }
+
+    CedarUserApiKey target = findApiKey(currentUser, key);
+    if (target == null) {
+      return apiKeyNotFound(key);
+    }
+
+    // Count how many enabled keys would remain after removing this one.
+    long remainingEnabled = currentUser.getApiKeys().stream()
+        .filter(k -> k != target && k.isEnabled())
+        .count();
+    if (remainingEnabled < 1) {
+      return CedarResponse.badRequest()
+          .errorKey(CedarErrorKey.INVALID_INPUT)
+          .errorMessage("You must keep at least one active API key. Regenerate this key instead of deleting it.")
+          .build();
+    }
+
+    currentUser.getApiKeys().remove(target);
+    return persistAndRespond(currentUser);
+  }
+
+  /**
+   * Returns a 403 response when {@code uuid} does not identify the current user; otherwise null.
+   */
+  private Response forbiddenIfNotSelf(String uuid, CedarUser currentUser) {
+    String id = linkedDataUtil.getUserId(uuid);
+    if (!id.equals(currentUser.getId())) {
+      return CedarResponse.forbidden()
+          .id(id)
+          .errorKey(CedarErrorKey.UPDATE_OTHER_PROFILE_FORBIDDEN)
+          .errorMessage("You are not allowed to manage another user's API keys!")
+          .parameter("currentUserId", currentUser.getId())
+          .build();
+    }
+    return null;
+  }
+
+  private CedarUserApiKey findApiKey(CedarUser user, String key) {
+    if (user.getApiKeys() == null) {
+      return null;
+    }
+    for (CedarUserApiKey k : user.getApiKeys()) {
+      if (k.getKey() != null && k.getKey().equals(key)) {
+        return k;
+      }
+    }
+    return null;
+  }
+
+  private Response apiKeyNotFound(String key) {
+    return CedarResponse.notFound()
+        .errorKey(CedarErrorKey.INVALID_INPUT)
+        .errorMessage("API key not found.")
+        .parameter("key", key)
+        .build();
+  }
+
+  /**
+   * Persists the (mutated) user and returns the updated user JSON, mirroring the shape of GET /users/{id}.
+   */
+  private Response persistAndRespond(CedarUser currentUser) throws CedarException {
+    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.updateUser(currentUser);
+    if (cedarUserBackendCallResult.isError()) {
+      return CedarResponse.from(cedarUserBackendCallResult);
+    }
+    CedarUser updatedUser = cedarUserBackendCallResult.getPayload();
+    JsonNode updatedUserNode = JsonMapper.MAPPER.valueToTree(updatedUser);
+    // Remove autogenerated _id field to avoid exposing it
+    MongoUtils.removeIdField(updatedUserNode);
+    return Response.ok().entity(updatedUserNode).build();
+  }
+
+  /**
+   * Generates a new, cryptographically-random API key rendered as 64 lowercase hex characters
+   * (256 bits of entropy), matching the format of the keys CEDAR generates at user provisioning time.
+   */
+  private String generateRandomApiKey() {
+    SecureRandom random = new SecureRandom();
+    byte[] bytes = new byte[32];
+    random.nextBytes(bytes);
+    StringBuilder sb = new StringBuilder(64);
+    for (byte b : bytes) {
+      sb.append(String.format("%02x", b));
+    }
+    return sb.toString();
   }
 }
