@@ -1,12 +1,12 @@
 package org.metadatacenter.cedar.user.resources;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.dropwizard.testing.DropwizardTestSupport;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
 import org.metadatacenter.config.CedarConfig;
@@ -31,23 +31,23 @@ import java.util.Map;
 public class UsersResourceNeo4jTest {
 
   static {
-    // Must run before the application rule boots the server, which reads the Neo4j env vars.
+    // Must run before the test support boots the server, which reads the Neo4j env vars.
     // Redis is redirected to a dead port: queue writes are best-effort, and this enforces that
     // no endpoint under test ever depends on a live Redis.
     EmbeddedCedarNeo4j.startAndRedirectEnvironment(Map.of("CEDAR_REDIS_PERSISTENT_PORT", "1"));
   }
 
-  @ClassRule
-  public static final DropwizardAppRule<UserServerConfiguration> SERVER =
-      new DropwizardAppRule<>(UserServerApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
+  public static final DropwizardTestSupport<UserServerConfiguration> SERVER =
+      new DropwizardTestSupport<>(UserServerApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
 
   private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
   private static String authHeaderUser1;
   private static String user1Uuid;
 
-  @BeforeClass
+  @BeforeAll
   public static void oneTimeSetUp() throws Exception {
+    SERVER.before();
     Map<String, String> environment = CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER);
     CedarConfig cedarConfig = CedarConfig.getInstance(environment);
 
@@ -58,6 +58,11 @@ public class UsersResourceNeo4jTest {
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
     String user1Id = TestAuthUtil.getTestUser1(cedarConfig).getId();
     user1Uuid = user1Id.substring(user1Id.lastIndexOf('/') + 1);
+  }
+
+  @AfterAll
+  public static void oneTimeTearDown() {
+    SERVER.after();
   }
 
   private HttpResponse<String> request(String method, String body) throws Exception {
@@ -76,24 +81,24 @@ public class UsersResourceNeo4jTest {
   @Test
   public void ownProfileIsServedFromTheGraph() throws Exception {
     HttpResponse<String> response = request("GET", null);
-    Assert.assertEquals(200, response.statusCode());
-    Assert.assertEquals("Test1", JsonMapper.MAPPER.readTree(response.body()).get("firstName").asText());
+    Assertions.assertEquals(200, response.statusCode());
+    Assertions.assertEquals("Test1", JsonMapper.MAPPER.readTree(response.body()).get("firstName").asText());
   }
 
   @Test
   public void uiPreferencesPatchRoundTripsThroughTheGraph() throws Exception {
     HttpResponse<String> updated = request("PUT", "{\"uiPreferences.stylesheet\": \"graph-test\"}");
-    Assert.assertEquals(200, updated.statusCode());
+    Assertions.assertEquals(200, updated.statusCode());
 
     HttpResponse<String> readBack = request("GET", null);
-    Assert.assertEquals("graph-test",
+    Assertions.assertEquals("graph-test",
         JsonMapper.MAPPER.readTree(readBack.body()).at("/uiPreferences/stylesheet").asText());
   }
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
-    Assert.assertEquals(400, response.statusCode());
+    Assertions.assertEquals(400, response.statusCode());
   }
 
 }

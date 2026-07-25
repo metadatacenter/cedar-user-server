@@ -1,12 +1,12 @@
 package org.metadatacenter.cedar.user.resources;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.dropwizard.testing.DropwizardTestSupport;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
 import org.metadatacenter.config.CedarConfig;
@@ -30,9 +30,8 @@ import java.util.Map;
  */
 public class UsersResourceTest {
 
-  @ClassRule
-  public static final DropwizardAppRule<UserServerConfiguration> SERVER =
-      new DropwizardAppRule<>(UserServerApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
+  public static final DropwizardTestSupport<UserServerConfiguration> SERVER =
+      new DropwizardTestSupport<>(UserServerApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
 
   private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
@@ -41,8 +40,9 @@ public class UsersResourceTest {
   private static String user1Uuid;
   private static String user2Uuid;
 
-  @BeforeClass
+  @BeforeAll
   public static void oneTimeSetUp() {
+    SERVER.before();
     Map<String, String> environment = CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER);
     cedarConfig = CedarConfig.getInstance(environment);
 
@@ -53,6 +53,11 @@ public class UsersResourceTest {
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
     user1Uuid = lastSegment(TestAuthUtil.getTestUser1(cedarConfig).getId());
     user2Uuid = lastSegment(TestAuthUtil.getTestUser2(cedarConfig).getId());
+  }
+
+  @AfterAll
+  public static void oneTimeTearDown() {
+    SERVER.after();
   }
 
   private static String lastSegment(String id) {
@@ -75,37 +80,37 @@ public class UsersResourceTest {
   @Test
   public void ownProfileIsServed() throws Exception {
     HttpResponse<String> response = request("GET", user1Uuid, null);
-    Assert.assertEquals(200, response.statusCode());
+    Assertions.assertEquals(200, response.statusCode());
     JsonNode user = JsonMapper.MAPPER.readTree(response.body());
-    Assert.assertEquals("Test1", user.get("firstName").asText());
-    Assert.assertFalse("The Mongo _id field must not be exposed", user.has("_id"));
+    Assertions.assertEquals("Test1", user.get("firstName").asText());
+    Assertions.assertFalse(user.has("_id"), "The Mongo _id field must not be exposed");
   }
 
   @Test
   public void otherProfileReadIsForbidden() throws Exception {
     HttpResponse<String> response = request("GET", user2Uuid, null);
-    Assert.assertEquals(403, response.statusCode());
-    Assert.assertTrue(response.body().contains("readOtherProfileForbidden"));
+    Assertions.assertEquals(403, response.statusCode());
+    Assertions.assertTrue(response.body().contains("readOtherProfileForbidden"));
   }
 
   @Test
   public void otherProfileUpdateIsForbidden() throws Exception {
     HttpResponse<String> response = request("PUT", user2Uuid, "{}");
-    Assert.assertEquals(403, response.statusCode());
+    Assertions.assertEquals(403, response.statusCode());
   }
 
   @Test
   public void uiPreferencesCanBePatched() throws Exception {
     HttpResponse<String> response = request("PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"smoke-test\"}");
-    Assert.assertEquals(200, response.statusCode());
+    Assertions.assertEquals(200, response.statusCode());
     JsonNode user = JsonMapper.MAPPER.readTree(response.body());
-    Assert.assertEquals("smoke-test", user.at("/uiPreferences/stylesheet").asText());
+    Assertions.assertEquals("smoke-test", user.at("/uiPreferences/stylesheet").asText());
   }
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     HttpResponse<String> response = request("PUT", user1Uuid, "{\"firstName\": \"Changed\"}");
-    Assert.assertEquals(400, response.statusCode());
+    Assertions.assertEquals(400, response.statusCode());
   }
 
 }
