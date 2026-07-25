@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
 import org.metadatacenter.config.CedarConfig;
+import org.metadatacenter.config.environment.CedarEnvironmentSource;
 import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
 import org.metadatacenter.model.SystemComponent;
 import org.metadatacenter.util.json.JsonMapper;
@@ -19,6 +20,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -29,6 +31,16 @@ import java.util.Map;
  * is not covered here: it queries the Keycloak admin API and needs a live Keycloak.
  */
 public class UsersResourceTest {
+
+  static {
+    // Must run before the test support boots the server, which reads the port env vars.
+    // Alternate server ports, so the test instance never collides with a running dev server.
+    Map<String, String> environment = new HashMap<>(CedarEnvironmentSource.getAll());
+    environment.put("CEDAR_USER_HTTP_PORT", "19005");
+    environment.put("CEDAR_USER_ADMIN_PORT", "19105");
+    environment.put("CEDAR_USER_STOP_PORT", "19205");
+    CedarEnvironmentSource.setOverride(environment);
+  }
 
   public static final DropwizardTestSupport<UserServerConfiguration> SERVER =
       new DropwizardTestSupport<>(UserServerApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
