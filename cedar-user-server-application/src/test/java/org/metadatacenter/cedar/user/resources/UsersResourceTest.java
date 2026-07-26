@@ -53,7 +53,7 @@ public class UsersResourceTest {
   private static String user2Uuid;
 
   @BeforeAll
-  public static void oneTimeSetUp() {
+  public static void oneTimeSetUp() throws Exception {
     SERVER.before();
     Map<String, String> environment = CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER);
     cedarConfig = CedarConfig.getInstance(environment);
