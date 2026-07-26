@@ -1,7 +1,7 @@
 package org.metadatacenter.cedar.user;
 
-import io.dropwizard.setup.Bootstrap;
-import io.dropwizard.setup.Environment;
+import io.dropwizard.core.setup.Bootstrap;
+import io.dropwizard.core.setup.Environment;
 import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
 import org.metadatacenter.cedar.util.dw.CedarDefaultHealthCheck;
