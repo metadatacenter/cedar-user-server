@@ -247,7 +247,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     CedarUserApiKey target = findApiKey(currentUser, key);
     if (target == null) {
-      return apiKeyNotFound(key);
+      return apiKeyNotFound();
     }
 
     target.setKey(generateRandomApiKey());
@@ -277,7 +277,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     CedarUserApiKey target = findApiKey(currentUser, key);
     if (target == null) {
-      return apiKeyNotFound(key);
+      return apiKeyNotFound();
     }
 
     // Count how many enabled keys would remain after removing this one.
@@ -323,11 +323,11 @@ public class UsersResource extends AbstractUserServerResource {
     return null;
   }
 
-  private Response apiKeyNotFound(String key) {
+  private Response apiKeyNotFound() {
+    // Do not echo the supplied key value back in the response — it is a secret.
     return CedarResponse.notFound()
         .errorKey(CedarErrorKey.INVALID_INPUT)
         .errorMessage("API key not found.")
-        .parameter("key", key)
         .build();
   }
 
