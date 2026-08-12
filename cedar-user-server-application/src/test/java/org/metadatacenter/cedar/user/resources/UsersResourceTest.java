@@ -20,7 +20,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -151,6 +153,97 @@ public class UsersResourceTest {
         get("/users/00000000-0000-0000-0000-000000000000/summary", authHeaderAdmin);
     Assertions.assertEquals(404, response.statusCode(), response.body());
     Assertions.assertTrue(response.body().contains("userNotFound"), response.body());
+  }
+
+  private HttpResponse<String> send(String method, String path, String body) throws Exception {
+    HttpRequest.Builder builder = HttpRequest.newBuilder()
+        .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
+        .header("Authorization", authHeaderUser1)
+        .header("Content-Type", "application/json");
+    builder.method(method, body == null
+        ? HttpRequest.BodyPublishers.noBody()
+        : HttpRequest.BodyPublishers.ofString(body));
+    return CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  private static List<String> keyValues(String responseBody) throws Exception {
+    List<String> values = new ArrayList<>();
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      values.add(key.get("key").asText());
+    }
+    return values;
+  }
+
+  private String ownKeysPath() {
+    return "/users/" + user1Uuid + "/api-keys";
+  }
+
+  /**
+   * The key these tests authenticate with. It is the user's only seeded key and the auth header was
+   * built from it once, so no test may delete or regenerate it: doing so revokes the credential the
+   * rest of the class depends on. Every test below either adds a key or acts on one it added.
+   */
+  private static String authApiKey() {
+    return authHeaderUser1.substring(authHeaderUser1.lastIndexOf(' ') + 1);
+  }
+
+  @Test
+  public void anApiKeyIsCreatedAndListedAgainstTheUser() throws Exception {
+    List<String> before = keyValues(send("GET", "/users/" + user1Uuid, null).body());
+
+    HttpResponse<String> created = send("POST", ownKeysPath(), "{\"description\": \"a test key\"}");
+    Assertions.assertEquals(200, created.statusCode(), created.body());
+
+    List<String> after = keyValues(created.body());
+    Assertions.assertEquals(before.size() + 1, after.size(), created.body());
+    Assertions.assertTrue(after.containsAll(before), "the existing keys must survive: " + created.body());
+
+    // The key the caller was handed is the key the store holds. The change is applied to the stored
+    // list now, rather than to the copy the request arrived with and wrote back whole.
+    List<String> readBack = keyValues(send("GET", "/users/" + user1Uuid, null).body());
+    Assertions.assertEquals(after, readBack, "the created key must be present on a fresh read");
+  }
+
+  @Test
+  public void regeneratingAKeyReplacesItsValueAndKeepsTheCount() throws Exception {
+    List<String> before = keyValues(send("POST", ownKeysPath(), "{\"description\": \"to be rotated\"}").body());
+    String target = before.get(before.size() - 1);
+    Assertions.assertNotEquals(authApiKey(), target, "the test must not rotate its own credential");
+
+    HttpResponse<String> rotated = send("POST", ownKeysPath() + "/" + target + "/regenerate", null);
+    Assertions.assertEquals(200, rotated.statusCode(), rotated.body());
+
+    List<String> after = keyValues(rotated.body());
+    Assertions.assertEquals(before.size(), after.size(), rotated.body());
+    Assertions.assertFalse(after.contains(target), "the old value must be revoked: " + rotated.body());
+  }
+
+  @Test
+  public void anUnknownKeyIsNotFoundAndTheValueIsNotEchoed() throws Exception {
+    HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyvalue", null);
+    Assertions.assertEquals(404, response.statusCode(), response.body());
+    Assertions.assertFalse(response.body().contains("nosuchkeyvalue"),
+        "the supplied key value is a secret and must not come back: " + response.body());
+  }
+
+  /**
+   * Reduced to a single enabled key, the delete is refused — which is also why this test can run at
+   * all: the key it finally aims at is the one it authenticates with, and the refusal leaves it
+   * intact.
+   */
+  @Test
+  public void theLastEnabledKeyCanNotBeDeleted() throws Exception {
+    String authKey = authApiKey();
+    for (String key : keyValues(send("GET", "/users/" + user1Uuid, null).body())) {
+      if (!key.equals(authKey)) {
+        Assertions.assertEquals(200, send("DELETE", ownKeysPath() + "/" + key, null).statusCode());
+      }
+    }
+
+    HttpResponse<String> last = send("DELETE", ownKeysPath() + "/" + authKey, null);
+    Assertions.assertEquals(400, last.statusCode(), last.body());
+    Assertions.assertEquals(List.of(authKey), keyValues(send("GET", "/users/" + user1Uuid, null).body()),
+        "the refused delete must have left the key in place");
   }
 
   @Test
