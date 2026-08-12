@@ -49,6 +49,7 @@ public class UsersResourceTest {
 
   private static CedarConfig cedarConfig;
   private static String authHeaderUser1;
+  private static String authHeaderAdmin;
   private static String user1Uuid;
   private static String user2Uuid;
 
@@ -63,6 +64,7 @@ public class UsersResourceTest {
     UsersResource.injectUserService(TestAuthUtil.getInMemoryUserService(cedarConfig));
 
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
+    authHeaderAdmin = TestAuthUtil.getAdminUserAuthHeader(cedarConfig);
     user1Uuid = lastSegment(TestAuthUtil.getTestUser1(cedarConfig).getId());
     user2Uuid = lastSegment(TestAuthUtil.getTestUser2(cedarConfig).getId());
   }
@@ -109,6 +111,46 @@ public class UsersResourceTest {
   public void otherProfileUpdateIsForbidden() throws Exception {
     HttpResponse<String> response = request("PUT", user2Uuid, "{}");
     Assertions.assertEquals(403, response.statusCode());
+  }
+
+  private HttpResponse<String> get(String path, String authHeader) throws Exception {
+    HttpRequest request = HttpRequest.newBuilder()
+        .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
+        .header("Authorization", authHeader)
+        .GET()
+        .build();
+    return CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+  }
+
+  /**
+   * The summary is not public among logged-in users. It carries each federated identity provider and
+   * the account id held there — the user's identifier at Google or ORCID — and this endpoint alone in
+   * the resource asked nothing about who was calling.
+   *
+   * <p>Refused before Keycloak is consulted, which is why this runs without one.
+   */
+  @Test
+  public void otherUserSummaryIsForbidden() throws Exception {
+    HttpResponse<String> response = get("/users/" + user2Uuid + "/summary", authHeaderUser1);
+    Assertions.assertEquals(403, response.statusCode(), response.body());
+    Assertions.assertTrue(response.body().contains("readOtherProfileForbidden"), response.body());
+  }
+
+  /**
+   * A user administrator still reads any summary, which is what keeps provenance display names
+   * working: UserSummaryCache resolves them for arbitrary users as the built-in admin. Asserted
+   * through an unknown id, so the answer proves the caller passed the authorization gate and was
+   * stopped by the lookup rather than by permission — and so the assertion needs no Keycloak.
+   *
+   * <p>USER_READ belongs to the userAdministrator role, which cedar-main.yml grants to builtInAdmin
+   * and not to a normal user.
+   */
+  @Test
+  public void aUserAdministratorReachesTheLookupAndAnUnknownUserIsNotFound() throws Exception {
+    HttpResponse<String> response =
+        get("/users/00000000-0000-0000-0000-000000000000/summary", authHeaderAdmin);
+    Assertions.assertEquals(404, response.statusCode(), response.body());
+    Assertions.assertTrue(response.body().contains("userNotFound"), response.body());
   }
 
   @Test

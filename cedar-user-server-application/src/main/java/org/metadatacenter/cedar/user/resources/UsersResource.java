@@ -14,6 +14,7 @@ import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.KeycloakUtilInfo;
 import org.metadatacenter.server.security.KeycloakUtils;
+import org.metadatacenter.server.security.model.auth.CedarPermission;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.security.model.user.CedarUserApiKey;
 import org.metadatacenter.server.service.UserService;
@@ -24,6 +25,7 @@ import org.metadatacenter.util.mongo.MongoUtils;
 
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -99,12 +101,48 @@ public class UsersResource extends AbstractUserServerResource {
     c.must(c.user()).be(LoggedIn);
 
     String id = linkedDataUtil.getUserId(uuid);
+    CedarUser currentUser = c.getCedarUser();
+
+    // Self, or a user administrator. USER_READ belongs to the userAdministrator role, which the
+    // built-in admin holds and an ordinary user does not, so this admits the provenance display-name
+    // lookup UserSummaryCache makes as the admin while refusing one user's summary to another. The
+    // summary carries each federated identity provider together with the account id held there,
+    // which is the user's identifier at Google or ORCID.
+    if (!id.equals(currentUser.getId()) && !currentUser.has(CedarPermission.USER_READ)) {
+      return CedarResponse.forbidden()
+          .id(id)
+          .errorKey(CedarErrorKey.READ_OTHER_PROFILE_FORBIDDEN)
+          .errorMessage("You are not allowed to read other user's profile!")
+          .parameter("currentUserId", currentUser.getId())
+          .build();
+    }
+
     CedarUserId uid = CedarUserId.build(id);
 
     CedarUser lookupUser = userService.findUser(uid);
-    UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
+    // An id CEDAR does not hold produced a 200 carrying a null screen name, since getDisplayName
+    // answers null for a null user.
+    if (lookupUser == null) {
+      return CedarResponse.notFound()
+          .id(id)
+          .errorKey(CedarErrorKey.USER_NOT_FOUND)
+          .errorMessage("The user can not be found by id!")
+          .build();
+    }
 
-    UserRepresentation keyCloakUserRepresentation = userResource.toRepresentation();
+    UserRepresentation keyCloakUserRepresentation;
+    try {
+      UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
+      keyCloakUserRepresentation = userResource.toRepresentation();
+    } catch (NotFoundException e) {
+      // Keycloak reports an unknown user by throwing, which left through the generic mapper as a
+      // bare 404 carrying no CEDAR error body.
+      return CedarResponse.notFound()
+          .id(id)
+          .errorKey(CedarErrorKey.USER_NOT_FOUND)
+          .errorMessage("The user can not be found by id!")
+          .build();
+    }
 
     Map<String, Object> summary = new HashMap<>();
     summary.put("userId", id);
@@ -280,15 +318,20 @@ public class UsersResource extends AbstractUserServerResource {
       return apiKeyNotFound();
     }
 
-    // Count how many enabled keys would remain after removing this one.
-    long remainingEnabled = currentUser.getApiKeys().stream()
-        .filter(k -> k != target && k.isEnabled())
-        .count();
-    if (remainingEnabled < 1) {
-      return CedarResponse.badRequest()
-          .errorKey(CedarErrorKey.INVALID_INPUT)
-          .errorMessage("You must keep at least one active API key. Regenerate this key instead of deleting it.")
-          .build();
+    // Only removing an enabled key can leave the account without a working one. Applied to a disabled
+    // key too, the guard refused the delete and offered regeneration, which does not enable a key —
+    // so a user whose only key was disabled could neither remove it nor make it work.
+    if (target.isEnabled()) {
+      // Count how many enabled keys would remain after removing this one.
+      long remainingEnabled = currentUser.getApiKeys().stream()
+          .filter(k -> k != target && k.isEnabled())
+          .count();
+      if (remainingEnabled < 1) {
+        return CedarResponse.badRequest()
+            .errorKey(CedarErrorKey.INVALID_INPUT)
+            .errorMessage("You must keep at least one active API key. Regenerate this key instead of deleting it.")
+            .build();
+      }
     }
 
     currentUser.getApiKeys().remove(target);
