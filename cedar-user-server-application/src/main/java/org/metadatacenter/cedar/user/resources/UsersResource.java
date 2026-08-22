@@ -14,6 +14,7 @@ import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.KeycloakUtilInfo;
 import org.metadatacenter.server.security.KeycloakUtils;
+import org.metadatacenter.server.security.model.auth.CedarPermission;
 import org.metadatacenter.server.security.model.user.CedarUser;
 import org.metadatacenter.server.security.model.user.CedarUserApiKey;
 import org.metadatacenter.server.service.UserService;
@@ -24,6 +25,7 @@ import org.metadatacenter.util.mongo.MongoUtils;
 
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -99,12 +101,48 @@ public class UsersResource extends AbstractUserServerResource {
     c.must(c.user()).be(LoggedIn);
 
     String id = linkedDataUtil.getUserId(uuid);
+    CedarUser currentUser = c.getCedarUser();
+
+    // Self, or a user administrator. USER_READ belongs to the userAdministrator role, which the
+    // built-in admin holds and an ordinary user does not, so this admits the provenance display-name
+    // lookup UserSummaryCache makes as the admin while refusing one user's summary to another. The
+    // summary carries each federated identity provider together with the account id held there,
+    // which is the user's identifier at Google or ORCID.
+    if (!id.equals(currentUser.getId()) && !currentUser.has(CedarPermission.USER_READ)) {
+      return CedarResponse.forbidden()
+          .id(id)
+          .errorKey(CedarErrorKey.READ_OTHER_PROFILE_FORBIDDEN)
+          .errorMessage("You are not allowed to read other user's profile!")
+          .parameter("currentUserId", currentUser.getId())
+          .build();
+    }
+
     CedarUserId uid = CedarUserId.build(id);
 
     CedarUser lookupUser = userService.findUser(uid);
-    UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
+    // An id CEDAR does not hold produced a 200 carrying a null screen name, since getDisplayName
+    // answers null for a null user.
+    if (lookupUser == null) {
+      return CedarResponse.notFound()
+          .id(id)
+          .errorKey(CedarErrorKey.USER_NOT_FOUND)
+          .errorMessage("The user can not be found by id!")
+          .build();
+    }
 
-    UserRepresentation keyCloakUserRepresentation = userResource.toRepresentation();
+    UserRepresentation keyCloakUserRepresentation;
+    try {
+      UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
+      keyCloakUserRepresentation = userResource.toRepresentation();
+    } catch (NotFoundException e) {
+      // Keycloak reports an unknown user by throwing, which left through the generic mapper as a
+      // bare 404 carrying no CEDAR error body.
+      return CedarResponse.notFound()
+          .id(id)
+          .errorKey(CedarErrorKey.USER_NOT_FOUND)
+          .errorMessage("The user can not be found by id!")
+          .build();
+    }
 
     Map<String, Object> summary = new HashMap<>();
     summary.put("userId", id);
@@ -188,19 +226,6 @@ public class UsersResource extends AbstractUserServerResource {
       return forbidden;
     }
 
-    List<CedarUserApiKey> keys = currentUser.getApiKeys();
-    if (keys == null) {
-      keys = new ArrayList<>();
-      currentUser.setApiKeys(keys);
-    }
-    if (keys.size() >= MAX_API_KEYS) {
-      return CedarResponse.badRequest()
-          .errorKey(CedarErrorKey.INVALID_INPUT)
-          .errorMessage("You may have at most " + MAX_API_KEYS + " API keys. Delete one before creating another.")
-          .parameter("maxApiKeys", MAX_API_KEYS)
-          .build();
-    }
-
     String description = null;
     JsonNode body = c.request().getRequestBody().asJson();
     if (body != null && body.hasNonNull("description")) {
@@ -219,9 +244,10 @@ public class UsersResource extends AbstractUserServerResource {
     newApiKey.setDescription(description);
     newApiKey.setCreationDate(LocalDateTime.now());
     newApiKey.setEnabled(true);
-    keys.add(newApiKey);
 
-    return persistAndRespond(currentUser);
+    // The ceiling is checked where the keys are written, not here. Checked against the copy this
+    // request holds, it could pass while another request was adding a key of its own.
+    return respond(userService.addApiKey(CedarUserId.build(currentUser.getId()), newApiKey, MAX_API_KEYS));
   }
 
   /**
@@ -245,20 +271,14 @@ public class UsersResource extends AbstractUserServerResource {
       return forbidden;
     }
 
-    CedarUserApiKey target = findApiKey(currentUser, key);
-    if (target == null) {
-      return apiKeyNotFound();
-    }
-
-    target.setKey(generateRandomApiKey());
-    target.setCreationDate(LocalDateTime.now());
-
-    return persistAndRespond(currentUser);
+    return respond(userService.regenerateApiKey(CedarUserId.build(currentUser.getId()), key,
+        generateRandomApiKey(), LocalDateTime.now()));
   }
 
   /**
    * Deletes a single API key. Refused when it would leave the user with no enabled key: a user must
-   * always keep at least one active key (regenerate it instead of deleting the last one).
+   * always keep at least one active key (regenerate it instead of deleting the last one). Deleting a
+   * disabled key is always allowed, since a disabled key is not the account's working one.
    * <p>
    * Self-only.
    */
@@ -275,24 +295,9 @@ public class UsersResource extends AbstractUserServerResource {
       return forbidden;
     }
 
-    CedarUserApiKey target = findApiKey(currentUser, key);
-    if (target == null) {
-      return apiKeyNotFound();
-    }
-
-    // Count how many enabled keys would remain after removing this one.
-    long remainingEnabled = currentUser.getApiKeys().stream()
-        .filter(k -> k != target && k.isEnabled())
-        .count();
-    if (remainingEnabled < 1) {
-      return CedarResponse.badRequest()
-          .errorKey(CedarErrorKey.INVALID_INPUT)
-          .errorMessage("You must keep at least one active API key. Regenerate this key instead of deleting it.")
-          .build();
-    }
-
-    currentUser.getApiKeys().remove(target);
-    return persistAndRespond(currentUser);
+    // Both the lookup of the key and the "keep one active key" rule are applied where the keys are
+    // written, against the stored list rather than against the copy this request holds.
+    return respond(userService.deleteApiKey(CedarUserId.build(currentUser.getId()), key));
   }
 
   /**
@@ -311,36 +316,15 @@ public class UsersResource extends AbstractUserServerResource {
     return null;
   }
 
-  private CedarUserApiKey findApiKey(CedarUser user, String key) {
-    if (user.getApiKeys() == null) {
-      return null;
-    }
-    for (CedarUserApiKey k : user.getApiKeys()) {
-      if (k.getKey() != null && k.getKey().equals(key)) {
-        return k;
-      }
-    }
-    return null;
-  }
-
-  private Response apiKeyNotFound() {
-    // Do not echo the supplied key value back in the response — it is a secret.
-    return CedarResponse.notFound()
-        .errorKey(CedarErrorKey.INVALID_INPUT)
-        .errorMessage("API key not found.")
-        .build();
-  }
-
   /**
-   * Persists the (mutated) user and returns the updated user JSON, mirroring the shape of GET /users/{id}.
+   * Renders the outcome of a key change as the updated user JSON, mirroring the shape of
+   * GET /users/{id}. A refusal carries its own status and message from the layer that applied it.
    */
-  private Response persistAndRespond(CedarUser currentUser) throws CedarException {
-    BackendCallResult<CedarUser> cedarUserBackendCallResult = userService.updateUser(currentUser);
-    if (cedarUserBackendCallResult.isError()) {
-      return CedarResponse.from(cedarUserBackendCallResult);
+  private Response respond(BackendCallResult<CedarUser> callResult) {
+    if (callResult.isError()) {
+      return CedarResponse.from(callResult);
     }
-    CedarUser updatedUser = cedarUserBackendCallResult.getPayload();
-    JsonNode updatedUserNode = JsonMapper.MAPPER.valueToTree(updatedUser);
+    JsonNode updatedUserNode = JsonMapper.MAPPER.valueToTree(callResult.getPayload());
     // Remove autogenerated _id field to avoid exposing it
     MongoUtils.removeIdField(updatedUserNode);
     return Response.ok().entity(updatedUserNode).build();

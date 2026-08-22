@@ -20,7 +20,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The real-storage variant of the user profile tests: nothing is mocked. Authentication resolves
@@ -104,6 +111,118 @@ public class UsersResourceNeo4jTest {
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
     Assertions.assertEquals(400, response.statusCode());
+  }
+
+  private HttpResponse<String> send(String method, String path, String body) throws Exception {
+    HttpRequest.Builder builder = HttpRequest.newBuilder()
+        .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
+        .header("Authorization", authHeaderUser1)
+        .header("Content-Type", "application/json");
+    builder.method(method, body == null
+        ? HttpRequest.BodyPublishers.noBody()
+        : HttpRequest.BodyPublishers.ofString(body));
+    return CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  private static List<String> keyValues(String responseBody) throws Exception {
+    List<String> values = new ArrayList<>();
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      values.add(key.get("key").asText());
+    }
+    return values;
+  }
+
+  private String keysPath() {
+    return "/users/" + user1Uuid + "/api-keys";
+  }
+
+  /**
+   * The key this class authenticates with. It is seeded as the user's only key and the auth header
+   * was built from it once, so no test may delete or regenerate it.
+   */
+  private static String authApiKey() {
+    return authHeaderUser1.substring(authHeaderUser1.lastIndexOf(' ') + 1);
+  }
+
+  /**
+   * The key operations against the real Cypher layer. The in-memory variant proves the endpoint
+   * rules; this proves that the transaction which reads the stored keys and writes them back in one
+   * step does what the rules expect.
+   */
+  @Test
+  public void apiKeysAreCreatedRotatedAndRemovedThroughTheGraph() throws Exception {
+    HttpResponse<String> created = send("POST", keysPath(), "{\"description\": \"graph lifecycle\"}");
+    Assertions.assertEquals(200, created.statusCode(), created.body());
+    List<String> afterCreate = keyValues(created.body());
+    String target = afterCreate.get(afterCreate.size() - 1);
+    Assertions.assertNotEquals(authApiKey(), target, "the test must not act on its own credential");
+
+    HttpResponse<String> rotated = send("POST", keysPath() + "/" + target + "/regenerate", null);
+    Assertions.assertEquals(200, rotated.statusCode(), rotated.body());
+    List<String> afterRotate = keyValues(rotated.body());
+    Assertions.assertEquals(afterCreate.size(), afterRotate.size(), rotated.body());
+    Assertions.assertFalse(afterRotate.contains(target), "the rotated value must be gone: " + rotated.body());
+
+    String rotatedValue = afterRotate.stream().filter(k -> !k.equals(authApiKey())).findFirst().orElseThrow();
+    HttpResponse<String> deleted = send("DELETE", keysPath() + "/" + rotatedValue, null);
+    Assertions.assertEquals(200, deleted.statusCode(), deleted.body());
+    Assertions.assertFalse(keyValues(deleted.body()).contains(rotatedValue), deleted.body());
+
+    // Every remaining key but the credential goes, so the refusal below is asked of a user who holds
+    // exactly one. Other tests in this class add keys and the order between them is not fixed, so the
+    // state has to be established here rather than assumed.
+    for (String key : keyValues(send("GET", "/users/" + user1Uuid, null).body())) {
+      if (!key.equals(authApiKey())) {
+        Assertions.assertEquals(200, send("DELETE", keysPath() + "/" + key, null).statusCode());
+      }
+    }
+
+    // Down to the credential itself, which must be refused rather than leaving no working key — and
+    // the refusal is what lets this class keep authenticating afterwards.
+    HttpResponse<String> last = send("DELETE", keysPath() + "/" + authApiKey(), null);
+    Assertions.assertEquals(400, last.statusCode(), last.body());
+    Assertions.assertEquals(List.of(authApiKey()), keyValues(send("GET", "/users/" + user1Uuid, null).body()),
+        "the refused delete must have left the credential in place");
+  }
+
+  /**
+   * Every concurrently created key survives.
+   *
+   * <p>This is the property the transaction buys. Each request used to read the user at
+   * authentication time, append to that copy, and write the whole user back, so two creations that
+   * overlapped both wrote a list built from the same starting point and the later write dropped the
+   * earlier key — while its caller had already been handed it in a 200 and would find it
+   * authenticated nothing. The keys are now read and written inside one transaction per request, and
+   * the writes serialize on the user node.
+   */
+  @Test
+  public void concurrentlyCreatedKeysAllSurvive() throws Exception {
+    int concurrent = 6;
+    List<String> beforeKeys = keyValues(send("GET", "/users/" + user1Uuid, null).body());
+
+    ExecutorService pool = Executors.newFixedThreadPool(concurrent);
+    CountDownLatch releaseTogether = new CountDownLatch(1);
+    List<Future<HttpResponse<String>>> responses = new ArrayList<>();
+    try {
+      for (int i = 0; i < concurrent; i++) {
+        int n = i;
+        responses.add(pool.submit(() -> {
+          releaseTogether.await();
+          return send("POST", keysPath(), "{\"description\": \"concurrent " + n + "\"}");
+        }));
+      }
+      releaseTogether.countDown();
+      for (Future<HttpResponse<String>> response : responses) {
+        Assertions.assertEquals(200, response.get(30, TimeUnit.SECONDS).statusCode());
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+
+    List<String> afterKeys = keyValues(send("GET", "/users/" + user1Uuid, null).body());
+    Assertions.assertEquals(beforeKeys.size() + concurrent, afterKeys.size(),
+        "every concurrently created key should be stored, none overwritten: " + afterKeys);
+    Assertions.assertTrue(afterKeys.containsAll(beforeKeys), "the keys held beforehand must survive");
   }
 
 }
