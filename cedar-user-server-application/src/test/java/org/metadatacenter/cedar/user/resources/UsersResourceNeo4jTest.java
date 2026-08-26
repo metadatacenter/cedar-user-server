@@ -55,6 +55,7 @@ public class UsersResourceNeo4jTest {
   private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
   private static String authHeaderUser1;
+  private static String authHeaderUser2;
   private static String user1Uuid;
 
   @BeforeAll
@@ -68,6 +69,7 @@ public class UsersResourceNeo4jTest {
     EmbeddedCedarNeo4j.seed(cedarConfig);
 
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
+    authHeaderUser2 = TestAuthUtil.getTestUser2AuthHeader(cedarConfig);
     String user1Id = TestAuthUtil.getTestUser1(cedarConfig).getId();
     user1Uuid = user1Id.substring(user1Id.lastIndexOf('/') + 1);
   }
@@ -114,14 +116,35 @@ public class UsersResourceNeo4jTest {
   }
 
   private HttpResponse<String> send(String method, String path, String body) throws Exception {
+    return send(method, path, body, authHeaderUser1);
+  }
+
+  private HttpResponse<String> send(String method, String path, String body, String authHeader) throws Exception {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
-        .header("Authorization", authHeaderUser1)
+        .header("Authorization", authHeader)
         .header("Content-Type", "application/json");
     builder.method(method, body == null
         ? HttpRequest.BodyPublishers.noBody()
         : HttpRequest.BodyPublishers.ofString(body));
     return CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  private void assertForbiddenForUser2(String method, String path, String body) throws Exception {
+    HttpResponse<String> response = send(method, path, body, authHeaderUser2);
+    Assertions.assertEquals(403, response.statusCode(), method + " " + path + ": " + response.body());
+  }
+
+  @Test
+  public void ordinaryUserCanNotAccessAnotherUsersIdScopedEndpoints() {
+    String user1Path = "/users/" + user1Uuid;
+    Assertions.assertAll(
+        () -> assertForbiddenForUser2("GET", user1Path, null),
+        () -> assertForbiddenForUser2("PUT", user1Path, "{}"),
+        () -> assertForbiddenForUser2("GET", user1Path + "/summary", null),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys", "{}"),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys/not-the-users-key/regenerate", null),
+        () -> assertForbiddenForUser2("DELETE", user1Path + "/api-keys/not-the-users-key", null));
   }
 
   private static List<String> keyValues(String responseBody) throws Exception {
