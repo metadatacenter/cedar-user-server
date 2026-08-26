@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
 import org.metadatacenter.config.CedarConfig;
@@ -41,6 +42,8 @@ public class UsersResourceTest {
     environment.put("CEDAR_USER_HTTP_PORT", "19005");
     environment.put("CEDAR_USER_ADMIN_PORT", "19105");
     environment.put("CEDAR_USER_STOP_PORT", "19205");
+    environment.put("CEDAR_NEO4J_HOST", "127.0.0.1");
+    environment.put("CEDAR_NEO4J_BOLT_PORT", "1");
     CedarEnvironmentSource.setOverride(environment);
   }
 
@@ -102,6 +105,30 @@ public class UsersResourceTest {
     JsonNode user = JsonMapper.MAPPER.readTree(response.body());
     Assertions.assertEquals("Test1", user.get("firstName").asText());
     Assertions.assertFalse(user.has("_id"), "The Mongo _id field must not be exposed");
+  }
+
+  @Test
+  public void graphOutageReturnsSanitizedServiceUnavailable() throws Exception {
+    // Authentication stays in memory, while the resource is briefly restored to the application's
+    // real Neo4j service. This separates a dependency failure in the operation from a failure to
+    // authenticate the test request.
+    UsersResource.injectUserService(CedarDataServices.getInstance().getNeoUserService());
+    try {
+      HttpResponse<String> response = request(
+          "PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"unavailable\"}");
+
+      Assertions.assertEquals(503, response.statusCode(), response.body());
+      JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+      Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
+      Assertions.assertEquals("Neo4j is unavailable", error.path("message").asText(), response.body());
+      Assertions.assertTrue(error.path("originalException").isMissingNode()
+          || error.path("originalException").isNull(), response.body());
+      Assertions.assertTrue(error.path("sourceException").isMissingNode()
+          || error.path("sourceException").isNull(), response.body());
+      Assertions.assertFalse(response.body().contains("127.0.0.1"), response.body());
+    } finally {
+      UsersResource.injectUserService(TestAuthUtil.getInMemoryUserService(cedarConfig));
+    }
   }
 
   @Test
