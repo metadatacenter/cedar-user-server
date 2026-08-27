@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -90,6 +91,7 @@ public class UsersResourceTest {
   private HttpResponse<String> request(String method, String uuid, String body) throws Exception {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + "/users/" + uuid))
+        .timeout(Duration.ofSeconds(5))
         .header("Authorization", authHeaderUser1)
         .header("Content-Type", "application/json");
     if (body == null) {
@@ -241,6 +243,15 @@ public class UsersResourceTest {
     return values;
   }
 
+  private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      if (keyValue.equals(key.get("key").asText())) {
+        return key.get("id").asText();
+      }
+    }
+    throw new AssertionError("No API key with the requested value was returned");
+  }
+
   private String ownKeysPath() {
     return "/users/" + user1Uuid + "/api-keys";
   }
@@ -264,6 +275,11 @@ public class UsersResourceTest {
     List<String> after = keyValues(created.body());
     Assertions.assertEquals(before.size() + 1, after.size(), created.body());
     Assertions.assertTrue(after.containsAll(before), "the existing keys must survive: " + created.body());
+    for (JsonNode key : JsonMapper.MAPPER.readTree(created.body()).get("apiKeys")) {
+      Assertions.assertTrue(key.hasNonNull("id"), "every API key must expose a management id: " + created.body());
+      Assertions.assertNotEquals(key.get("key").asText(), key.get("id").asText(),
+          "the management id must not be the secret: " + created.body());
+    }
 
     // The key the caller was handed is the key the store holds. The change is applied to the stored
     // list now, rather than to the copy the request arrived with and wrote back whole.
@@ -273,24 +289,31 @@ public class UsersResourceTest {
 
   @Test
   public void regeneratingAKeyReplacesItsValueAndKeepsTheCount() throws Exception {
-    List<String> before = keyValues(send("POST", ownKeysPath(), "{\"description\": \"to be rotated\"}").body());
+    String createdBody = send("POST", ownKeysPath(), "{\"description\": \"to be rotated\"}").body();
+    List<String> before = keyValues(createdBody);
     String target = before.get(before.size() - 1);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not rotate its own credential");
+    String targetId = keyIdForValue(createdBody, target);
 
-    HttpResponse<String> rotated = send("POST", ownKeysPath() + "/" + target + "/regenerate", null);
+    HttpResponse<String> secretInPath = send("POST", ownKeysPath() + "/" + target + "/regenerate", null);
+    Assertions.assertEquals(404, secretInPath.statusCode(),
+        "management lookup must not accept the credential as an identifier: " + secretInPath.body());
+
+    HttpResponse<String> rotated = send("POST", ownKeysPath() + "/" + targetId + "/regenerate", null);
     Assertions.assertEquals(200, rotated.statusCode(), rotated.body());
 
     List<String> after = keyValues(rotated.body());
     Assertions.assertEquals(before.size(), after.size(), rotated.body());
     Assertions.assertFalse(after.contains(target), "the old value must be revoked: " + rotated.body());
+    Assertions.assertTrue(JsonMapper.MAPPER.readTree(rotated.body()).get("apiKeys").findValuesAsText("id")
+        .contains(targetId), "rotation must preserve the management id: " + rotated.body());
   }
 
   @Test
-  public void anUnknownKeyIsNotFoundAndTheValueIsNotEchoed() throws Exception {
-    HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyvalue", null);
+  public void anUnknownKeyIdIsNotFound() throws Exception {
+    HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyid", null);
     Assertions.assertEquals(404, response.statusCode(), response.body());
-    Assertions.assertFalse(response.body().contains("nosuchkeyvalue"),
-        "the supplied key value is a secret and must not come back: " + response.body());
+    Assertions.assertFalse(response.body().contains("nosuchkeyid"), response.body());
   }
 
   /**
@@ -301,13 +324,16 @@ public class UsersResourceTest {
   @Test
   public void theLastEnabledKeyCanNotBeDeleted() throws Exception {
     String authKey = authApiKey();
-    for (String key : keyValues(send("GET", "/users/" + user1Uuid, null).body())) {
+    String profile = send("GET", "/users/" + user1Uuid, null).body();
+    for (String key : keyValues(profile)) {
       if (!key.equals(authKey)) {
-        Assertions.assertEquals(200, send("DELETE", ownKeysPath() + "/" + key, null).statusCode());
+        String keyId = keyIdForValue(profile, key);
+        Assertions.assertEquals(200, send("DELETE", ownKeysPath() + "/" + keyId, null).statusCode());
       }
     }
 
-    HttpResponse<String> last = send("DELETE", ownKeysPath() + "/" + authKey, null);
+    String authKeyId = keyIdForValue(send("GET", "/users/" + user1Uuid, null).body(), authKey);
+    HttpResponse<String> last = send("DELETE", ownKeysPath() + "/" + authKeyId, null);
     Assertions.assertEquals(400, last.statusCode(), last.body());
     Assertions.assertEquals(List.of(authKey), keyValues(send("GET", "/users/" + user1Uuid, null).body()),
         "the refused delete must have left the key in place");
