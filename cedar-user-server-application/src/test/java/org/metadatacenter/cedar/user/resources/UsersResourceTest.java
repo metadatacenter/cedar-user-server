@@ -30,8 +30,9 @@ import java.util.Map;
  * Endpoint tests for the user profile resource, running with no live backend: authentication and
  * the user store are served by the in-memory user service. The profile-ownership rules and the
  * uiPreferences patch semantics (shared with the Neo4j-backed service through UserServiceUtil)
- * are exercised through real HTTP requests against the booted application. The summary endpoint
- * is not covered here: it queries the Keycloak admin API and needs a live Keycloak.
+ * are exercised through real HTTP requests against the booted application. The summary endpoint's
+ * success response needs a live Keycloak; this fixture covers its authorization, not-found and
+ * unavailable-Keycloak responses.
  */
 public class UsersResourceTest {
 
@@ -44,6 +45,7 @@ public class UsersResourceTest {
     environment.put("CEDAR_USER_STOP_PORT", "19205");
     environment.put("CEDAR_NEO4J_HOST", "127.0.0.1");
     environment.put("CEDAR_NEO4J_BOLT_PORT", "1");
+    environment.put("CEDAR_HOST", "localhost:1");
     CedarEnvironmentSource.setOverride(environment);
   }
 
@@ -182,6 +184,21 @@ public class UsersResourceTest {
         get("/users/00000000-0000-0000-0000-000000000000/summary", authHeaderAdmin);
     Assertions.assertEquals(404, response.statusCode(), response.body());
     Assertions.assertTrue(response.body().contains("userNotFound"), response.body());
+  }
+
+  @Test
+  public void keycloakOutageReturnsSanitizedServiceUnavailable() throws Exception {
+    HttpResponse<String> response = get("/users/" + user1Uuid + "/summary", authHeaderUser1);
+
+    Assertions.assertEquals(503, response.statusCode(), response.body());
+    JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+    Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
+    Assertions.assertEquals("Keycloak is unavailable", error.path("message").asText(), response.body());
+    Assertions.assertTrue(error.path("originalException").isMissingNode()
+        || error.path("originalException").isNull(), response.body());
+    Assertions.assertTrue(error.path("sourceException").isMissingNode()
+        || error.path("sourceException").isNull(), response.body());
+    Assertions.assertFalse(response.body().contains("localhost"), response.body());
   }
 
   private HttpResponse<String> send(String method, String path, String body) throws Exception {

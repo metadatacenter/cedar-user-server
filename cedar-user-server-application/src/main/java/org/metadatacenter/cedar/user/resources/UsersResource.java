@@ -8,6 +8,7 @@ import org.keycloak.representations.idm.FederatedIdentityRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
+import org.metadatacenter.exception.CedarDependencyUnavailableException;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.rest.context.CedarRequestContext;
@@ -30,6 +31,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -142,6 +144,8 @@ public class UsersResource extends AbstractUserServerResource {
           .errorKey(CedarErrorKey.USER_NOT_FOUND)
           .errorMessage("The user can not be found by id!")
           .build();
+    } catch (ProcessingException e) {
+      throw new CedarDependencyUnavailableException("Keycloak is unavailable", e);
     }
 
     Map<String, Object> summary = new HashMap<>();
