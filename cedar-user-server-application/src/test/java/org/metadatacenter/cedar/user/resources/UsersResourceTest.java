@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
 import org.metadatacenter.config.CedarConfig;
@@ -20,6 +21,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,8 +31,9 @@ import java.util.Map;
  * Endpoint tests for the user profile resource, running with no live backend: authentication and
  * the user store are served by the in-memory user service. The profile-ownership rules and the
  * uiPreferences patch semantics (shared with the Neo4j-backed service through UserServiceUtil)
- * are exercised through real HTTP requests against the booted application. The summary endpoint
- * is not covered here: it queries the Keycloak admin API and needs a live Keycloak.
+ * are exercised through real HTTP requests against the booted application. The summary endpoint's
+ * success response needs a live Keycloak; this fixture covers its authorization, not-found and
+ * unavailable-Keycloak responses.
  */
 public class UsersResourceTest {
 
@@ -41,6 +44,9 @@ public class UsersResourceTest {
     environment.put("CEDAR_USER_HTTP_PORT", "19005");
     environment.put("CEDAR_USER_ADMIN_PORT", "19105");
     environment.put("CEDAR_USER_STOP_PORT", "19205");
+    environment.put("CEDAR_NEO4J_HOST", "127.0.0.1");
+    environment.put("CEDAR_NEO4J_BOLT_PORT", "1");
+    environment.put("CEDAR_HOST", "localhost:1");
     CedarEnvironmentSource.setOverride(environment);
   }
 
@@ -51,6 +57,7 @@ public class UsersResourceTest {
 
   private static CedarConfig cedarConfig;
   private static String authHeaderUser1;
+  private static String authHeaderUser2;
   private static String authHeaderAdmin;
   private static String user1Uuid;
   private static String user2Uuid;
@@ -66,6 +73,7 @@ public class UsersResourceTest {
     UsersResource.injectUserService(TestAuthUtil.getInMemoryUserService(cedarConfig));
 
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
+    authHeaderUser2 = TestAuthUtil.getTestUser2AuthHeader(cedarConfig);
     authHeaderAdmin = TestAuthUtil.getAdminUserAuthHeader(cedarConfig);
     user1Uuid = lastSegment(TestAuthUtil.getTestUser1(cedarConfig).getId());
     user2Uuid = lastSegment(TestAuthUtil.getTestUser2(cedarConfig).getId());
@@ -83,6 +91,7 @@ public class UsersResourceTest {
   private HttpResponse<String> request(String method, String uuid, String body) throws Exception {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + "/users/" + uuid))
+        .timeout(Duration.ofSeconds(5))
         .header("Authorization", authHeaderUser1)
         .header("Content-Type", "application/json");
     if (body == null) {
@@ -100,6 +109,30 @@ public class UsersResourceTest {
     JsonNode user = JsonMapper.MAPPER.readTree(response.body());
     Assertions.assertEquals("Test1", user.get("firstName").asText());
     Assertions.assertFalse(user.has("_id"), "The Mongo _id field must not be exposed");
+  }
+
+  @Test
+  public void graphOutageReturnsSanitizedServiceUnavailable() throws Exception {
+    // Authentication stays in memory, while the resource is briefly restored to the application's
+    // real Neo4j service. This separates a dependency failure in the operation from a failure to
+    // authenticate the test request.
+    UsersResource.injectUserService(CedarDataServices.getInstance().getNeoUserService());
+    try {
+      HttpResponse<String> response = request(
+          "PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"unavailable\"}");
+
+      Assertions.assertEquals(503, response.statusCode(), response.body());
+      JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+      Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
+      Assertions.assertEquals("Neo4j is unavailable", error.path("message").asText(), response.body());
+      Assertions.assertTrue(error.path("originalException").isMissingNode()
+          || error.path("originalException").isNull(), response.body());
+      Assertions.assertTrue(error.path("sourceException").isMissingNode()
+          || error.path("sourceException").isNull(), response.body());
+      Assertions.assertFalse(response.body().contains("127.0.0.1"), response.body());
+    } finally {
+      UsersResource.injectUserService(TestAuthUtil.getInMemoryUserService(cedarConfig));
+    }
   }
 
   @Test
@@ -155,15 +188,51 @@ public class UsersResourceTest {
     Assertions.assertTrue(response.body().contains("userNotFound"), response.body());
   }
 
+  @Test
+  public void keycloakOutageReturnsSanitizedServiceUnavailable() throws Exception {
+    HttpResponse<String> response = get("/users/" + user1Uuid + "/summary", authHeaderUser1);
+
+    Assertions.assertEquals(503, response.statusCode(), response.body());
+    JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+    Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
+    Assertions.assertEquals("Keycloak is unavailable", error.path("message").asText(), response.body());
+    Assertions.assertTrue(error.path("originalException").isMissingNode()
+        || error.path("originalException").isNull(), response.body());
+    Assertions.assertTrue(error.path("sourceException").isMissingNode()
+        || error.path("sourceException").isNull(), response.body());
+    Assertions.assertFalse(response.body().contains("localhost"), response.body());
+  }
+
   private HttpResponse<String> send(String method, String path, String body) throws Exception {
+    return send(method, path, body, authHeaderUser1);
+  }
+
+  private HttpResponse<String> send(String method, String path, String body, String authHeader) throws Exception {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
-        .header("Authorization", authHeaderUser1)
+        .header("Authorization", authHeader)
         .header("Content-Type", "application/json");
     builder.method(method, body == null
         ? HttpRequest.BodyPublishers.noBody()
         : HttpRequest.BodyPublishers.ofString(body));
     return CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  private void assertForbiddenForUser2(String method, String path, String body) throws Exception {
+    HttpResponse<String> response = send(method, path, body, authHeaderUser2);
+    Assertions.assertEquals(403, response.statusCode(), method + " " + path + ": " + response.body());
+  }
+
+  @Test
+  public void ordinaryUserCanNotAccessAnotherUsersIdScopedEndpoints() {
+    String user1Path = "/users/" + user1Uuid;
+    Assertions.assertAll(
+        () -> assertForbiddenForUser2("GET", user1Path, null),
+        () -> assertForbiddenForUser2("PUT", user1Path, "{}"),
+        () -> assertForbiddenForUser2("GET", user1Path + "/summary", null),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys", "{}"),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys/not-the-users-key/regenerate", null),
+        () -> assertForbiddenForUser2("DELETE", user1Path + "/api-keys/not-the-users-key", null));
   }
 
   private static List<String> keyValues(String responseBody) throws Exception {
@@ -172,6 +241,15 @@ public class UsersResourceTest {
       values.add(key.get("key").asText());
     }
     return values;
+  }
+
+  private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      if (keyValue.equals(key.get("key").asText())) {
+        return key.get("id").asText();
+      }
+    }
+    throw new AssertionError("No API key with the requested value was returned");
   }
 
   private String ownKeysPath() {
@@ -197,6 +275,11 @@ public class UsersResourceTest {
     List<String> after = keyValues(created.body());
     Assertions.assertEquals(before.size() + 1, after.size(), created.body());
     Assertions.assertTrue(after.containsAll(before), "the existing keys must survive: " + created.body());
+    for (JsonNode key : JsonMapper.MAPPER.readTree(created.body()).get("apiKeys")) {
+      Assertions.assertTrue(key.hasNonNull("id"), "every API key must expose a management id: " + created.body());
+      Assertions.assertNotEquals(key.get("key").asText(), key.get("id").asText(),
+          "the management id must not be the secret: " + created.body());
+    }
 
     // The key the caller was handed is the key the store holds. The change is applied to the stored
     // list now, rather than to the copy the request arrived with and wrote back whole.
@@ -206,24 +289,31 @@ public class UsersResourceTest {
 
   @Test
   public void regeneratingAKeyReplacesItsValueAndKeepsTheCount() throws Exception {
-    List<String> before = keyValues(send("POST", ownKeysPath(), "{\"description\": \"to be rotated\"}").body());
+    String createdBody = send("POST", ownKeysPath(), "{\"description\": \"to be rotated\"}").body();
+    List<String> before = keyValues(createdBody);
     String target = before.get(before.size() - 1);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not rotate its own credential");
+    String targetId = keyIdForValue(createdBody, target);
 
-    HttpResponse<String> rotated = send("POST", ownKeysPath() + "/" + target + "/regenerate", null);
+    HttpResponse<String> secretInPath = send("POST", ownKeysPath() + "/" + target + "/regenerate", null);
+    Assertions.assertEquals(404, secretInPath.statusCode(),
+        "management lookup must not accept the credential as an identifier: " + secretInPath.body());
+
+    HttpResponse<String> rotated = send("POST", ownKeysPath() + "/" + targetId + "/regenerate", null);
     Assertions.assertEquals(200, rotated.statusCode(), rotated.body());
 
     List<String> after = keyValues(rotated.body());
     Assertions.assertEquals(before.size(), after.size(), rotated.body());
     Assertions.assertFalse(after.contains(target), "the old value must be revoked: " + rotated.body());
+    Assertions.assertTrue(JsonMapper.MAPPER.readTree(rotated.body()).get("apiKeys").findValuesAsText("id")
+        .contains(targetId), "rotation must preserve the management id: " + rotated.body());
   }
 
   @Test
-  public void anUnknownKeyIsNotFoundAndTheValueIsNotEchoed() throws Exception {
-    HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyvalue", null);
+  public void anUnknownKeyIdIsNotFound() throws Exception {
+    HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyid", null);
     Assertions.assertEquals(404, response.statusCode(), response.body());
-    Assertions.assertFalse(response.body().contains("nosuchkeyvalue"),
-        "the supplied key value is a secret and must not come back: " + response.body());
+    Assertions.assertFalse(response.body().contains("nosuchkeyid"), response.body());
   }
 
   /**
@@ -234,13 +324,16 @@ public class UsersResourceTest {
   @Test
   public void theLastEnabledKeyCanNotBeDeleted() throws Exception {
     String authKey = authApiKey();
-    for (String key : keyValues(send("GET", "/users/" + user1Uuid, null).body())) {
+    String profile = send("GET", "/users/" + user1Uuid, null).body();
+    for (String key : keyValues(profile)) {
       if (!key.equals(authKey)) {
-        Assertions.assertEquals(200, send("DELETE", ownKeysPath() + "/" + key, null).statusCode());
+        String keyId = keyIdForValue(profile, key);
+        Assertions.assertEquals(200, send("DELETE", ownKeysPath() + "/" + keyId, null).statusCode());
       }
     }
 
-    HttpResponse<String> last = send("DELETE", ownKeysPath() + "/" + authKey, null);
+    String authKeyId = keyIdForValue(send("GET", "/users/" + user1Uuid, null).body(), authKey);
+    HttpResponse<String> last = send("DELETE", ownKeysPath() + "/" + authKeyId, null);
     Assertions.assertEquals(400, last.statusCode(), last.body());
     Assertions.assertEquals(List.of(authKey), keyValues(send("GET", "/users/" + user1Uuid, null).body()),
         "the refused delete must have left the key in place");

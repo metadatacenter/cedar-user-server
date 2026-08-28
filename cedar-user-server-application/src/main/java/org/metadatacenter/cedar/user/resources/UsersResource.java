@@ -8,6 +8,7 @@ import org.keycloak.representations.idm.FederatedIdentityRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
+import org.metadatacenter.exception.CedarDependencyUnavailableException;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.rest.context.CedarRequestContext;
@@ -30,6 +31,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -40,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
 import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
@@ -142,6 +145,8 @@ public class UsersResource extends AbstractUserServerResource {
           .errorKey(CedarErrorKey.USER_NOT_FOUND)
           .errorMessage("The user can not be found by id!")
           .build();
+    } catch (ProcessingException e) {
+      throw new CedarDependencyUnavailableException("Keycloak is unavailable", e);
     }
 
     Map<String, Object> summary = new HashMap<>();
@@ -239,6 +244,7 @@ public class UsersResource extends AbstractUserServerResource {
     }
 
     CedarUserApiKey newApiKey = new CedarUserApiKey();
+    newApiKey.setId(UUID.randomUUID().toString());
     newApiKey.setKey(generateRandomApiKey());
     newApiKey.setServiceName("CEDAR");
     newApiKey.setDescription(description);
@@ -251,7 +257,7 @@ public class UsersResource extends AbstractUserServerResource {
   }
 
   /**
-   * Regenerates a single API key: the key identified by {@code key} in the path keeps its
+   * Regenerates a single API key: the key identified by its non-secret {@code keyId} in the path keeps its
    * description / service name / enabled flag but gets a brand new, random value (and a fresh
    * creation date), so the old value is immediately revoked. The key count is unchanged, so this
    * is always safe - it is the way to "rotate" the last remaining key without dropping below one.
@@ -260,8 +266,9 @@ public class UsersResource extends AbstractUserServerResource {
    */
   @POST
   @Timed
-  @Path("/{id}/api-keys/{key}/regenerate")
-  public Response regenerateApiKey(@PathParam(PP_ID) String uuid, @PathParam("key") String key) throws CedarException {
+  @Path("/{id}/api-keys/{keyId}/regenerate")
+  public Response regenerateApiKey(@PathParam(PP_ID) String uuid, @PathParam("keyId") String keyId)
+      throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
 
@@ -271,7 +278,7 @@ public class UsersResource extends AbstractUserServerResource {
       return forbidden;
     }
 
-    return respond(userService.regenerateApiKey(CedarUserId.build(currentUser.getId()), key,
+    return respond(userService.regenerateApiKey(CedarUserId.build(currentUser.getId()), keyId,
         generateRandomApiKey(), LocalDateTime.now()));
   }
 
@@ -284,8 +291,9 @@ public class UsersResource extends AbstractUserServerResource {
    */
   @DELETE
   @Timed
-  @Path("/{id}/api-keys/{key}")
-  public Response deleteApiKey(@PathParam(PP_ID) String uuid, @PathParam("key") String key) throws CedarException {
+  @Path("/{id}/api-keys/{keyId}")
+  public Response deleteApiKey(@PathParam(PP_ID) String uuid, @PathParam("keyId") String keyId)
+      throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
 
@@ -297,7 +305,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     // Both the lookup of the key and the "keep one active key" rule are applied where the keys are
     // written, against the stored list rather than against the copy this request holds.
-    return respond(userService.deleteApiKey(CedarUserId.build(currentUser.getId()), key));
+    return respond(userService.deleteApiKey(CedarUserId.build(currentUser.getId()), keyId));
   }
 
   /**

@@ -55,6 +55,7 @@ public class UsersResourceNeo4jTest {
   private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
   private static String authHeaderUser1;
+  private static String authHeaderUser2;
   private static String user1Uuid;
 
   @BeforeAll
@@ -68,6 +69,7 @@ public class UsersResourceNeo4jTest {
     EmbeddedCedarNeo4j.seed(cedarConfig);
 
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
+    authHeaderUser2 = TestAuthUtil.getTestUser2AuthHeader(cedarConfig);
     String user1Id = TestAuthUtil.getTestUser1(cedarConfig).getId();
     user1Uuid = user1Id.substring(user1Id.lastIndexOf('/') + 1);
   }
@@ -114,14 +116,35 @@ public class UsersResourceNeo4jTest {
   }
 
   private HttpResponse<String> send(String method, String path, String body) throws Exception {
+    return send(method, path, body, authHeaderUser1);
+  }
+
+  private HttpResponse<String> send(String method, String path, String body, String authHeader) throws Exception {
     HttpRequest.Builder builder = HttpRequest.newBuilder()
         .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
-        .header("Authorization", authHeaderUser1)
+        .header("Authorization", authHeader)
         .header("Content-Type", "application/json");
     builder.method(method, body == null
         ? HttpRequest.BodyPublishers.noBody()
         : HttpRequest.BodyPublishers.ofString(body));
     return CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  private void assertForbiddenForUser2(String method, String path, String body) throws Exception {
+    HttpResponse<String> response = send(method, path, body, authHeaderUser2);
+    Assertions.assertEquals(403, response.statusCode(), method + " " + path + ": " + response.body());
+  }
+
+  @Test
+  public void ordinaryUserCanNotAccessAnotherUsersIdScopedEndpoints() {
+    String user1Path = "/users/" + user1Uuid;
+    Assertions.assertAll(
+        () -> assertForbiddenForUser2("GET", user1Path, null),
+        () -> assertForbiddenForUser2("PUT", user1Path, "{}"),
+        () -> assertForbiddenForUser2("GET", user1Path + "/summary", null),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys", "{}"),
+        () -> assertForbiddenForUser2("POST", user1Path + "/api-keys/not-the-users-key/regenerate", null),
+        () -> assertForbiddenForUser2("DELETE", user1Path + "/api-keys/not-the-users-key", null));
   }
 
   private static List<String> keyValues(String responseBody) throws Exception {
@@ -130,6 +153,24 @@ public class UsersResourceNeo4jTest {
       values.add(key.get("key").asText());
     }
     return values;
+  }
+
+  private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      if (keyValue.equals(key.get("key").asText())) {
+        return key.get("id").asText();
+      }
+    }
+    throw new AssertionError("No API key with the requested value was returned");
+  }
+
+  private static String keyValueForId(String responseBody, String keyId) throws Exception {
+    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+      if (keyId.equals(key.get("id").asText())) {
+        return key.get("key").asText();
+      }
+    }
+    throw new AssertionError("No API key with the requested id was returned");
   }
 
   private String keysPath() {
@@ -156,30 +197,37 @@ public class UsersResourceNeo4jTest {
     List<String> afterCreate = keyValues(created.body());
     String target = afterCreate.get(afterCreate.size() - 1);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not act on its own credential");
+    String targetId = keyIdForValue(created.body(), target);
+    Assertions.assertNotEquals(target, targetId, "the management id must not be the secret");
 
-    HttpResponse<String> rotated = send("POST", keysPath() + "/" + target + "/regenerate", null);
+    HttpResponse<String> rotated = send("POST", keysPath() + "/" + targetId + "/regenerate", null);
     Assertions.assertEquals(200, rotated.statusCode(), rotated.body());
     List<String> afterRotate = keyValues(rotated.body());
     Assertions.assertEquals(afterCreate.size(), afterRotate.size(), rotated.body());
     Assertions.assertFalse(afterRotate.contains(target), "the rotated value must be gone: " + rotated.body());
 
-    String rotatedValue = afterRotate.stream().filter(k -> !k.equals(authApiKey())).findFirst().orElseThrow();
-    HttpResponse<String> deleted = send("DELETE", keysPath() + "/" + rotatedValue, null);
+    String rotatedValue = keyValueForId(rotated.body(), targetId);
+    Assertions.assertEquals(targetId, keyIdForValue(rotated.body(), rotatedValue),
+        "rotation must preserve the management id");
+    HttpResponse<String> deleted = send("DELETE", keysPath() + "/" + targetId, null);
     Assertions.assertEquals(200, deleted.statusCode(), deleted.body());
     Assertions.assertFalse(keyValues(deleted.body()).contains(rotatedValue), deleted.body());
 
     // Every remaining key but the credential goes, so the refusal below is asked of a user who holds
     // exactly one. Other tests in this class add keys and the order between them is not fixed, so the
     // state has to be established here rather than assumed.
-    for (String key : keyValues(send("GET", "/users/" + user1Uuid, null).body())) {
+    String profile = send("GET", "/users/" + user1Uuid, null).body();
+    for (String key : keyValues(profile)) {
       if (!key.equals(authApiKey())) {
-        Assertions.assertEquals(200, send("DELETE", keysPath() + "/" + key, null).statusCode());
+        Assertions.assertEquals(200,
+            send("DELETE", keysPath() + "/" + keyIdForValue(profile, key), null).statusCode());
       }
     }
 
     // Down to the credential itself, which must be refused rather than leaving no working key — and
     // the refusal is what lets this class keep authenticating afterwards.
-    HttpResponse<String> last = send("DELETE", keysPath() + "/" + authApiKey(), null);
+    String authKeyId = keyIdForValue(send("GET", "/users/" + user1Uuid, null).body(), authApiKey());
+    HttpResponse<String> last = send("DELETE", keysPath() + "/" + authKeyId, null);
     Assertions.assertEquals(400, last.statusCode(), last.body());
     Assertions.assertEquals(List.of(authApiKey()), keyValues(send("GET", "/users/" + user1Uuid, null).body()),
         "the refused delete must have left the credential in place");
