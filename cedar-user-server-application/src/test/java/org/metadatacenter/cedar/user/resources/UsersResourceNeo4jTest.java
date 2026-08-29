@@ -9,9 +9,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
+import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
+import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.model.SystemComponent;
+import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserRole;
+import org.metadatacenter.server.security.model.user.CedarUserUIPreferences;
+import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.test.EmbeddedCedarNeo4j;
 import org.metadatacenter.util.test.TestAuthUtil;
@@ -271,6 +277,55 @@ public class UsersResourceNeo4jTest {
     Assertions.assertEquals(beforeKeys.size() + concurrent, afterKeys.size(),
         "every concurrently created key should be stored, none overwritten: " + afterKeys);
     Assertions.assertTrue(afterKeys.containsAll(beforeKeys), "the keys held beforehand must survive");
+  }
+
+  @Test
+  public void internalUserWritesTouchOnlyTheirOwnedProperties() throws Exception {
+    UserService users = CedarDataServices.getInstance().getNeoUserService();
+    CedarUserId userId = CedarUserId.build(TestAuthUtil.getTestUser1(
+        CedarConfig.getInstance(CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER))).getId());
+    CedarUser before = users.findUser(userId);
+
+    String originalHomeFolder = before.getHomeFolderId();
+    List<CedarUserRole> originalRoles = new ArrayList<>(before.getRoles());
+    List<String> originalPermissions = new ArrayList<>(before.getPermissions());
+    String originalKeys = JsonMapper.MAPPER.writeValueAsString(before.getApiKeys());
+    CedarUserUIPreferences originalPreferences = JsonMapper.MAPPER.readValue(
+        JsonMapper.MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
+    String originalPreferencesJson = JsonMapper.MAPPER.writeValueAsString(originalPreferences);
+
+    try {
+      Assertions.assertFalse(users.setHomeFolderId(userId, "https://repo.metadatacenter.org/folders/atomic-test")
+          .isError());
+      CedarUser afterHomeFolder = users.findUser(userId);
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
+      Assertions.assertEquals(originalRoles, afterHomeFolder.getRoles());
+      Assertions.assertEquals(originalPermissions, afterHomeFolder.getPermissions());
+      Assertions.assertEquals(originalPreferencesJson,
+          JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
+
+      Assertions.assertFalse(users.replaceRolesAndPermissions(userId, List.of(), List.of()).isError());
+      CedarUser afterAuthorization = users.findUser(userId);
+      Assertions.assertTrue(afterAuthorization.getRoles().isEmpty());
+      Assertions.assertTrue(afterAuthorization.getPermissions().isEmpty());
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
+      Assertions.assertEquals(originalPreferencesJson,
+          JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
+
+      CedarUserUIPreferences replacementPreferences = JsonMapper.MAPPER.readValue(originalPreferencesJson,
+          CedarUserUIPreferences.class);
+      replacementPreferences.setStylesheet("atomic-test");
+      Assertions.assertFalse(users.replaceUiPreferences(userId, replacementPreferences).isError());
+      CedarUser afterPreferences = users.findUser(userId);
+      Assertions.assertEquals("atomic-test", afterPreferences.getUiPreferences().getStylesheet());
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
+      Assertions.assertTrue(afterPreferences.getRoles().isEmpty());
+      Assertions.assertTrue(afterPreferences.getPermissions().isEmpty());
+    } finally {
+      users.setHomeFolderId(userId, originalHomeFolder);
+      users.replaceRolesAndPermissions(userId, originalRoles, originalPermissions);
+      users.replaceUiPreferences(userId, originalPreferences);
+    }
   }
 
 }

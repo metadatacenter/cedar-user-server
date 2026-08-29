@@ -1,0 +1,20 @@
+# Base OpenAPI document merged with the User Server's JAX-RS annotations at build time.
+openapi: 3.0.1
+info:
+  title: CEDAR User Server API
+  description: |
+    CEDAR user profile and API-key management.
+
+    The profile update endpoint accepts a field-level UI-preferences patch despite its historical
+    PUT method. The server locks and rereads the stored profile, applies only the requested settings,
+    and writes only UI preferences. API-key creation, rotation, and deletion are likewise atomic
+    commands over the current stored key list. These operations do not replace a caller-held user
+    representation, so they do not use ETag or If-Match preconditions.
+  version: ${project.version}
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: Authorization
+      in: header
+      description: "Your CEDAR API key, using the format 'apiKey <yourApiKey>'"

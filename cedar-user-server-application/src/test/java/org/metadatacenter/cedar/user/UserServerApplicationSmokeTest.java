@@ -68,4 +68,12 @@ public class UserServerApplicationSmokeTest {
     Assertions.assertEquals(401, response.statusCode());
   }
 
+  @Test
+  public void generatedOpenApiSpecificationIsServed() throws Exception {
+    HttpResponse<String> response = get("/swagger-api/swagger.json");
+    Assertions.assertEquals(200, response.statusCode());
+    Assertions.assertTrue(response.body().contains("CEDAR User Server API"));
+    Assertions.assertTrue(response.body().contains("/users/{id}/api-keys"));
+  }
+
 }

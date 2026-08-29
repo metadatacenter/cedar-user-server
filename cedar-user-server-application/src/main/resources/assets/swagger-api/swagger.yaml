@@ -1,0 +1,432 @@
+openapi: 3.0.1
+info:
+  description: |
+    CEDAR user profile and API-key management.
+
+    The profile update endpoint accepts a field-level UI-preferences patch despite its historical
+    PUT method. The server locks and rereads the stored profile, applies only the requested settings,
+    and writes only UI preferences. API-key creation, rotation, and deletion are likewise atomic
+    commands over the current stored key list. These operations do not replace a caller-held user
+    representation, so they do not use ETag or If-Match preconditions.
+  title: CEDAR User Server API
+  version: 2.9.4-SNAPSHOT
+paths:
+  /users/{id}:
+    get:
+      description: Returns the authenticated user's complete CEDAR profile. A user
+        cannot read another user's profile.
+      operationId: findOwnUser
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: The current user's profile
+        "401":
+          description: Unauthorized
+        "403":
+          description: Another user's profile was requested
+        "500":
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Get the current user's profile
+      tags:
+      - Users
+    put:
+      description: "Applies the supplied dotted-path preference changes to the current\
+        \ stored profile under a Neo4j write lock. Only uiPreferences fields are accepted,\
+        \ and the write cannot overwrite API keys, roles, permissions, identity fields,\
+        \ or the home folder. Because this is a field-level atomic patch rather than\
+        \ representation replacement, it does not use If-Match."
+      operationId: updateUser
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              type: object
+              example:
+                uiPreferences.stylesheet: cedar-dark
+                uiPreferences.preferredDateFormat: YYYY-MM-DD
+        description: An object whose keys are dotted uiPreferences paths
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: The updated user profile
+        "400":
+          description: A modification is invalid or targets a non-preference field
+        "401":
+          description: Unauthorized
+        "403":
+          description: Another user's profile was targeted
+        "404":
+          description: User not found
+        "500":
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Patch the current user's UI preferences
+      tags:
+      - Users
+  /users/{id}/api-keys:
+    post:
+      description: Atomically appends a newly generated credential to the current
+        stored key list. Concurrent creations are serialized and all successful keys
+        survive. Self-only; a user may hold at most 20 keys. This command does not
+        use If-Match.
+      operationId: createApiKey
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              type: object
+              example:
+                description: analysis pipeline
+        description: Optional API-key description
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: "The updated user profile, including the new key"
+        "400":
+          description: The user already has the maximum number of keys
+        "401":
+          description: Unauthorized
+        "403":
+          description: Another user's keys were targeted
+        "404":
+          description: User not found
+        "500":
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Create an API key
+      tags:
+      - Users
+  /users/{id}/api-keys/{keyId}:
+    delete:
+      description: Atomically removes one key from the current stored key list. Deleting
+        the last enabled key is refused so the account retains a working credential.
+        Self-only. This command does not use If-Match.
+      operationId: deleteApiKey
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - description: "Stable, non-secret API-key management identifier"
+        in: path
+        name: keyId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: The updated user profile
+        "400":
+          description: Deleting the key would leave no enabled credential
+        "401":
+          description: Unauthorized
+        "403":
+          description: Another user's keys were targeted
+        "404":
+          description: User or key not found
+        "500":
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Delete an API key
+      tags:
+      - Users
+  /users/{id}/api-keys/{keyId}/regenerate:
+    post:
+      description: Atomically replaces one key's secret and creation time while preserving
+        its stable management identifier and metadata. The previous secret is immediately
+        revoked. Self-only. This command does not use If-Match.
+      operationId: regenerateApiKey
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - description: "Stable, non-secret API-key management identifier"
+        in: path
+        name: keyId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: "The updated user profile, including the rotated key"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Another user's keys were targeted
+        "404":
+          description: User or key not found
+        "500":
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Regenerate an API key
+      tags:
+      - Users
+  /users/{id}/summary:
+    get:
+      description: Returns display and federated-identity information. Self access
+        and authorized administrator access only.
+      operationId: findUserSummary
+      parameters:
+      - description: CEDAR user UUID
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+          description: User summary
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: User not found
+        "500":
+          description: Internal server error
+        "503":
+          description: Keycloak is unavailable
+      security:
+      - api_key: []
+      summary: Get a user summary
+      tags:
+      - Users
+components:
+  schemas:
+    CedarUser:
+      type: object
+      properties:
+        '@id':
+          type: string
+        apiKeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/CedarUserApiKey"
+        email:
+          type: string
+        firstName:
+          type: string
+        homeFolderId:
+          type: string
+        lastName:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - defaultUser
+            - templateCreator
+            - metadataCreator
+            - userAdministrator
+            - groupAdministrator
+            - groupPrivilegedAdministrator
+            - filesystemAdministrator
+            - categoryAdministrator
+            - categoryPrivilegedAdministrator
+            - artifactPrivilegedAdministrator
+            - searchReindexer
+            - processMessageSender
+            - monitorManager
+        uiPreferences:
+          $ref: "#/components/schemas/CedarUserUIPreferences"
+    CedarUserApiKey:
+      type: object
+      properties:
+        creationDate:
+          type: string
+          format: date-time
+        description:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        key:
+          type: string
+        serviceName:
+          type: string
+    CedarUserUIFolderView:
+      type: object
+      properties:
+        currentFolderId:
+          type: string
+        sortBy:
+          type: string
+        sortDirection:
+          type: string
+          enum:
+          - asc
+          - desc
+        viewMode:
+          type: string
+          enum:
+          - grid
+          - list
+    CedarUserUIInfoPanel:
+      type: object
+      properties:
+        activeTab:
+          type: string
+          enum:
+          - info
+          - version
+          - category
+          - share
+        opened:
+          type: boolean
+    CedarUserUIMetadataEditor:
+      type: object
+      properties:
+        metadataJsonViewer:
+          type: boolean
+        templateJsonViewer:
+          type: boolean
+    CedarUserUIMetadataEditorV2:
+      type: object
+      properties:
+        collapseStaticComponents:
+          type: boolean
+        expandedInstanceDataCore:
+          type: boolean
+        expandedMultiInstanceInfo:
+          type: boolean
+        formFieldAppearance:
+          type: string
+        formFieldBackgroundColor:
+          type: string
+        multiInstanceTabIndexable:
+          type: boolean
+        showInstanceDataCore:
+          type: boolean
+        showMultiInstanceInfo:
+          type: boolean
+        showMultiInstancePagination:
+          type: boolean
+        showStaticText:
+          type: boolean
+        showTemplateRenderingRepresentation:
+          type: boolean
+    CedarUserUIPreferences:
+      type: object
+      properties:
+        folderView:
+          $ref: "#/components/schemas/CedarUserUIFolderView"
+        infoPanel:
+          $ref: "#/components/schemas/CedarUserUIInfoPanel"
+        metadataEditor:
+          $ref: "#/components/schemas/CedarUserUIMetadataEditor"
+        metadataEditorV2:
+          $ref: "#/components/schemas/CedarUserUIMetadataEditorV2"
+        preferredDateFormat:
+          type: string
+        resourcePublicationStatusFilter:
+          $ref: "#/components/schemas/CedarUserUIResourcePublicationStatusFilter"
+        resourceTypeFilters:
+          $ref: "#/components/schemas/CedarUserUIResourceTypeFilters"
+        resourceVersionFilter:
+          $ref: "#/components/schemas/CedarUserUIResourceVersionFilter"
+        stylesheet:
+          type: string
+        templateEditor:
+          $ref: "#/components/schemas/CedarUserUITemplateEditor"
+        useMetadataEditorV2:
+          type: boolean
+    CedarUserUIResourcePublicationStatusFilter:
+      type: object
+      properties:
+        publicationStatus:
+          type: string
+          enum:
+          - bibo:draft
+          - bibo:published
+          - all
+    CedarUserUIResourceTypeFilters:
+      type: object
+      properties:
+        element:
+          type: boolean
+        field:
+          type: boolean
+        instance:
+          type: boolean
+        template:
+          type: boolean
+    CedarUserUIResourceVersionFilter:
+      type: object
+      properties:
+        version:
+          type: string
+          enum:
+          - latest
+          - latest-by-status
+          - all
+    CedarUserUITemplateEditor:
+      type: object
+      properties:
+        templateJsonViewer:
+          type: boolean
+  securitySchemes:
+    api_key:
+      description: "Your CEDAR API key, using the format 'apiKey <yourApiKey>'"
+      in: header
+      name: Authorization
+      type: apiKey
