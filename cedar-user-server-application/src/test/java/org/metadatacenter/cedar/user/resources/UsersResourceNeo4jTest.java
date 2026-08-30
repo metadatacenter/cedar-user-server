@@ -46,12 +46,12 @@ public class UsersResourceNeo4jTest {
   static {
     // Must run before the test support boots the server, which reads the Neo4j env vars.
     // Redis is redirected to a dead port: queue writes are best-effort, and this enforces that
-    // no endpoint under test ever depends on a live Redis. Alternate server ports, so the test
+    // no endpoint under test ever depends on a live Redis. OS-assigned server ports, so the test
     // instance never collides with a running dev server.
     EmbeddedCedarNeo4j.startAndRedirectEnvironment(Map.of(
-        "CEDAR_USER_HTTP_PORT", "19005",
-        "CEDAR_USER_ADMIN_PORT", "19105",
-        "CEDAR_USER_STOP_PORT", "19205",
+        "CEDAR_USER_HTTP_PORT", "0",
+        "CEDAR_USER_ADMIN_PORT", "0",
+        "CEDAR_USER_STOP_PORT", "0",
         "CEDAR_REDIS_PERSISTENT_PORT", "1"));
   }
 

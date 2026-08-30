@@ -39,11 +39,11 @@ public class UsersResourceTest {
 
   static {
     // Must run before the test support boots the server, which reads the port env vars.
-    // Alternate server ports, so the test instance never collides with a running dev server.
+    // OS-assigned server ports, so the test instance never collides with a running dev server.
     Map<String, String> environment = new HashMap<>(CedarEnvironmentSource.getAll());
-    environment.put("CEDAR_USER_HTTP_PORT", "19005");
-    environment.put("CEDAR_USER_ADMIN_PORT", "19105");
-    environment.put("CEDAR_USER_STOP_PORT", "19205");
+    environment.put("CEDAR_USER_HTTP_PORT", "0");
+    environment.put("CEDAR_USER_ADMIN_PORT", "0");
+    environment.put("CEDAR_USER_STOP_PORT", "0");
     environment.put("CEDAR_NEO4J_HOST", "127.0.0.1");
     environment.put("CEDAR_NEO4J_BOLT_PORT", "1");
     environment.put("CEDAR_HOST", "localhost:1");
