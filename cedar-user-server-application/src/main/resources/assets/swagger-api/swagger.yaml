@@ -110,12 +110,13 @@ paths:
                 description: analysis pipeline
         description: Optional API-key description
       responses:
-        "200":
+        "201":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CedarUser"
-          description: "The updated user profile, including the new key"
+          description: "Created. Location names the new key; the body is the updated\
+            \ user profile, which is the only place the new key's value is readable"
         "400":
           description: The user already has the maximum number of keys
         "401":

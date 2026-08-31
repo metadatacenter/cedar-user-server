@@ -270,7 +270,11 @@ public class UsersResourceTest {
     List<String> before = keyValues(send("GET", "/users/" + user1Uuid, null).body());
 
     HttpResponse<String> created = send("POST", ownKeysPath(), "{\"description\": \"a test key\"}");
-    Assertions.assertEquals(200, created.statusCode(), created.body());
+    Assertions.assertEquals(201, created.statusCode(), created.body());
+    String location = created.headers().firstValue("Location").orElse(null);
+    Assertions.assertNotNull(location, "creating a sub-resource must say where it is: " + created.body());
+    Assertions.assertTrue(location.contains(ownKeysPath() + "/"),
+        "Location should name the new key under the keys path, was: " + location);
 
     List<String> after = keyValues(created.body());
     Assertions.assertEquals(before.size() + 1, after.size(), created.body());

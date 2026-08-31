@@ -199,7 +199,7 @@ public class UsersResourceNeo4jTest {
   @Test
   public void apiKeysAreCreatedRotatedAndRemovedThroughTheGraph() throws Exception {
     HttpResponse<String> created = send("POST", keysPath(), "{\"description\": \"graph lifecycle\"}");
-    Assertions.assertEquals(200, created.statusCode(), created.body());
+    Assertions.assertEquals(201, created.statusCode(), created.body());
     List<String> afterCreate = keyValues(created.body());
     String target = afterCreate.get(afterCreate.size() - 1);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not act on its own credential");
@@ -267,7 +267,7 @@ public class UsersResourceNeo4jTest {
       }
       releaseTogether.countDown();
       for (Future<HttpResponse<String>> response : responses) {
-        Assertions.assertEquals(200, response.get(30, TimeUnit.SECONDS).statusCode());
+        Assertions.assertEquals(201, response.get(30, TimeUnit.SECONDS).statusCode());
       }
     } finally {
       pool.shutdownNow();
