@@ -198,10 +198,18 @@ public class UsersResourceNeo4jTest {
    */
   @Test
   public void apiKeysAreCreatedRotatedAndRemovedThroughTheGraph() throws Exception {
+    // Identified by difference rather than by position. This method used to take the last key in
+    // the response as the one it had just created, while its own later step notes that other tests
+    // in this class add keys and the order between them is not fixed. When the graph returned the
+    // credential last, the test acted on the key it authenticates with and its guard failed.
+    List<String> beforeCreate = keyValues(send("GET", "/users/" + user1Uuid, null).body());
     HttpResponse<String> created = send("POST", keysPath(), "{\"description\": \"graph lifecycle\"}");
     Assertions.assertEquals(201, created.statusCode(), created.body());
     List<String> afterCreate = keyValues(created.body());
-    String target = afterCreate.get(afterCreate.size() - 1);
+    List<String> addedByThisRequest = afterCreate.stream().filter(key -> !beforeCreate.contains(key)).toList();
+    Assertions.assertEquals(1, addedByThisRequest.size(),
+        "one POST must add exactly one key: " + created.body());
+    String target = addedByThisRequest.get(0);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not act on its own credential");
     String targetId = keyIdForValue(created.body(), target);
     Assertions.assertNotEquals(target, targetId, "the management id must not be the secret");
