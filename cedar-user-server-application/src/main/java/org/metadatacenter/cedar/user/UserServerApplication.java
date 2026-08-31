@@ -2,8 +2,8 @@ package org.metadatacenter.cedar.user;
 
 import io.dropwizard.core.setup.Bootstrap;
 import io.dropwizard.core.setup.Environment;
-import org.metadatacenter.cedar.user.resources.IndexResource;
 import org.metadatacenter.cedar.user.resources.UsersResource;
+import org.metadatacenter.cedar.util.dw.CedarMicroserviceIndexResource;
 import org.metadatacenter.cedar.util.dw.CedarDefaultHealthCheck;
 import org.metadatacenter.cedar.util.dw.CedarMicroserviceApplication;
 import org.metadatacenter.config.CedarConfig;
@@ -31,7 +31,8 @@ public class UserServerApplication extends CedarMicroserviceApplication<UserServ
 
   @Override
   public void runApp(UserServerConfiguration configuration, Environment environment) {
-    final IndexResource index = new IndexResource(cedarConfig);
+    final CedarMicroserviceIndexResource index =
+        new CedarMicroserviceIndexResource(cedarConfig, getServerName());
     environment.jersey().register(index);
 
     final UsersResource users = new UsersResource(cedarConfig);
