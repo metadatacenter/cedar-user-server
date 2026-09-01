@@ -3,7 +3,7 @@
   "info" : {
     "description" : "CEDAR user profile and API-key management.\n\nThe profile update endpoint accepts a field-level UI-preferences patch despite its historical\nPUT method. The server locks and rereads the stored profile, applies only the requested settings,\nand writes only UI preferences. API-key creation, rotation, and deletion are likewise atomic\ncommands over the current stored key list. These operations do not replace a caller-held user\nrepresentation, so they do not use ETag or If-Match preconditions.\n",
     "title" : "CEDAR User Server API",
-    "version" : "2.9.5-SNAPSHOT"
+    "version" : "2.9.6-SNAPSHOT"
   },
   "paths" : {
     "/users/{id}" : {
