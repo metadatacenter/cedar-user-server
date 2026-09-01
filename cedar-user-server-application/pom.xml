@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.metadatacenter</groupId>
     <artifactId>cedar-user-server</artifactId>
-    <version>2.9.3</version>
+    <version>2.9.4</version>
   </parent>
 
   <groupId>org.metadatacenter</groupId>
@@ -50,6 +50,12 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
+    </dependency>
+
+    <!-- OpenAPI annotations used to generate the committed User Server specification. -->
+    <dependency>
+      <groupId>io.swagger.core.v3</groupId>
+      <artifactId>swagger-annotations-jakarta</artifactId>
     </dependency>
 
     <dependency>
@@ -102,6 +108,60 @@
         </configuration>
       </plugin>
 
+      <!-- Filter the base document so the generated specification carries the Maven version. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>filter-openapi-base</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/generated-swagger</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/src/main/swagger</directory>
+                  <includes>
+                    <include>openapi-base.yaml</include>
+                  </includes>
+                  <filtering>true</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Generate stable JSON and YAML OpenAPI artifacts beside the other classpath assets. The
+        shared Dropwizard bootstrap serves swagger.json from this location at runtime.
+      -->
+      <plugin>
+        <groupId>io.swagger.core.v3</groupId>
+        <artifactId>swagger-maven-plugin-jakarta</artifactId>
+        <configuration>
+          <outputPath>${project.basedir}/src/main/resources/assets/swagger-api</outputPath>
+          <outputFileName>swagger</outputFileName>
+          <outputFormat>JSONANDYAML</outputFormat>
+          <prettyPrint>true</prettyPrint>
+          <sortOutput>true</sortOutput>
+          <resourcePackages>
+            <package>org.metadatacenter.cedar.user.resources</package>
+          </resourcePackages>
+          <openapiFilePath>${project.build.directory}/generated-swagger/openapi-base.yaml</openapiFilePath>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>resolve</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

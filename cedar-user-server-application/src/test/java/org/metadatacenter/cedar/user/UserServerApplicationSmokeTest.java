@@ -24,11 +24,11 @@ public class UserServerApplicationSmokeTest {
 
   static {
     // Must run before the test support boots the server, which reads the port env vars.
-    // Alternate server ports, so the test instance never collides with a running dev server.
+    // OS-assigned server ports, so the test instance never collides with a running dev server.
     Map<String, String> environment = new HashMap<>(CedarEnvironmentSource.getAll());
-    environment.put("CEDAR_USER_HTTP_PORT", "19005");
-    environment.put("CEDAR_USER_ADMIN_PORT", "19105");
-    environment.put("CEDAR_USER_STOP_PORT", "19205");
+    environment.put("CEDAR_USER_HTTP_PORT", "0");
+    environment.put("CEDAR_USER_ADMIN_PORT", "0");
+    environment.put("CEDAR_USER_STOP_PORT", "0");
     CedarEnvironmentSource.setOverride(environment);
   }
 
@@ -66,6 +66,14 @@ public class UserServerApplicationSmokeTest {
   public void protectedEndpointRejectsMissingCredentials() throws Exception {
     HttpResponse<String> response = get("/users/00000000-0000-0000-0000-000000000000");
     Assertions.assertEquals(401, response.statusCode());
+  }
+
+  @Test
+  public void generatedOpenApiSpecificationIsServed() throws Exception {
+    HttpResponse<String> response = get("/swagger-api/swagger.json");
+    Assertions.assertEquals(200, response.statusCode());
+    Assertions.assertTrue(response.body().contains("CEDAR User Server API"));
+    Assertions.assertTrue(response.body().contains("/users/{id}/api-keys"));
   }
 
 }

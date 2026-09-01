@@ -39,11 +39,11 @@ public class UsersResourceTest {
 
   static {
     // Must run before the test support boots the server, which reads the port env vars.
-    // Alternate server ports, so the test instance never collides with a running dev server.
+    // OS-assigned server ports, so the test instance never collides with a running dev server.
     Map<String, String> environment = new HashMap<>(CedarEnvironmentSource.getAll());
-    environment.put("CEDAR_USER_HTTP_PORT", "19005");
-    environment.put("CEDAR_USER_ADMIN_PORT", "19105");
-    environment.put("CEDAR_USER_STOP_PORT", "19205");
+    environment.put("CEDAR_USER_HTTP_PORT", "0");
+    environment.put("CEDAR_USER_ADMIN_PORT", "0");
+    environment.put("CEDAR_USER_STOP_PORT", "0");
     environment.put("CEDAR_NEO4J_HOST", "127.0.0.1");
     environment.put("CEDAR_NEO4J_BOLT_PORT", "1");
     environment.put("CEDAR_HOST", "localhost:1");
@@ -270,7 +270,11 @@ public class UsersResourceTest {
     List<String> before = keyValues(send("GET", "/users/" + user1Uuid, null).body());
 
     HttpResponse<String> created = send("POST", ownKeysPath(), "{\"description\": \"a test key\"}");
-    Assertions.assertEquals(200, created.statusCode(), created.body());
+    Assertions.assertEquals(201, created.statusCode(), created.body());
+    String location = created.headers().firstValue("Location").orElse(null);
+    Assertions.assertNotNull(location, "creating a sub-resource must say where it is: " + created.body());
+    Assertions.assertTrue(location.contains(ownKeysPath() + "/"),
+        "Location should name the new key under the keys path, was: " + location);
 
     List<String> after = keyValues(created.body());
     Assertions.assertEquals(before.size() + 1, after.size(), created.body());

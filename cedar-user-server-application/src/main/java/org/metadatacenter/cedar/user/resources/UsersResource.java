@@ -2,6 +2,15 @@ package org.metadatacenter.cedar.user.resources;
 
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.FederatedIdentityRepresentation;
@@ -36,6 +45,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.security.SecureRandom;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -49,6 +59,8 @@ import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 
 @Path("/users")
 @Produces(MediaType.APPLICATION_JSON)
+@Tag(name = "Users")
+@SecurityRequirement(name = "api_key")
 public class UsersResource extends AbstractUserServerResource {
 
   private static final int MAX_API_KEYS = 20;
@@ -70,7 +82,17 @@ public class UsersResource extends AbstractUserServerResource {
   @GET
   @Timed
   @Path("/{id}")
-  public Response findOwnUser(@PathParam(PP_ID) String uuid) throws CedarException {
+  @Operation(summary = "Get the current user's profile",
+      description = "Returns the authenticated user's complete CEDAR profile. A user cannot read another user's profile.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "The current user's profile",
+          content = @Content(schema = @Schema(implementation = CedarUser.class))),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Another user's profile was requested"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response findOwnUser(@Parameter(description = "CEDAR user UUID", required = true)
+                              @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
@@ -98,7 +120,19 @@ public class UsersResource extends AbstractUserServerResource {
   @GET
   @Timed
   @Path("/{id}/summary")
-  public Response findUserSummary(@PathParam(PP_ID) String uuid) throws CedarException {
+  @Operation(summary = "Get a user summary",
+      description = "Returns display and federated-identity information. Self access and authorized administrator access only.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "User summary",
+          content = @Content(schema = @Schema(type = "object"))),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Forbidden"),
+      @ApiResponse(responseCode = "404", description = "User not found"),
+      @ApiResponse(responseCode = "503", description = "Keycloak is unavailable"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response findUserSummary(@Parameter(description = "CEDAR user UUID", required = true)
+                                  @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
@@ -176,7 +210,24 @@ public class UsersResource extends AbstractUserServerResource {
   @PUT
   @Timed
   @Path("/{id}")
-  public Response updateUser(@PathParam(PP_ID) String uuid) throws CedarException {
+  @Operation(summary = "Patch the current user's UI preferences", description = "Applies the supplied dotted-path "
+      + "preference changes to the current stored profile under a Neo4j write lock. Only uiPreferences fields are "
+      + "accepted, and the write cannot overwrite API keys, roles, permissions, identity fields, or the home folder. "
+      + "Because this is a field-level atomic patch rather than representation replacement, it does not use If-Match.")
+  @RequestBody(description = "An object whose keys are dotted uiPreferences paths",
+      required = true, content = @Content(schema = @Schema(type = "object",
+      example = "{\"uiPreferences.stylesheet\":\"cedar-dark\",\"uiPreferences.preferredDateFormat\":\"YYYY-MM-DD\"}")))
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "The updated user profile",
+          content = @Content(schema = @Schema(implementation = CedarUser.class))),
+      @ApiResponse(responseCode = "400", description = "A modification is invalid or targets a non-preference field"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Another user's profile was targeted"),
+      @ApiResponse(responseCode = "404", description = "User not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response updateUser(@Parameter(description = "CEDAR user UUID", required = true)
+                             @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
@@ -221,7 +272,23 @@ public class UsersResource extends AbstractUserServerResource {
   @POST
   @Timed
   @Path("/{id}/api-keys")
-  public Response createApiKey(@PathParam(PP_ID) String uuid) throws CedarException {
+  @Operation(summary = "Create an API key", description = "Atomically appends a newly generated credential to the "
+      + "current stored key list. Concurrent creations are serialized and all successful keys survive. Self-only; "
+      + "a user may hold at most 20 keys. This command does not use If-Match.")
+  @RequestBody(description = "Optional API-key description", required = false,
+      content = @Content(schema = @Schema(type = "object", example = "{\"description\":\"analysis pipeline\"}")))
+  @ApiResponses({
+      @ApiResponse(responseCode = "201", description = "Created. Location names the new key; the body is the "
+          + "updated user profile, which is the only place the new key's value is readable",
+          content = @Content(schema = @Schema(implementation = CedarUser.class))),
+      @ApiResponse(responseCode = "400", description = "The user already has the maximum number of keys"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", description = "User not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response createApiKey(@Parameter(description = "CEDAR user UUID", required = true)
+                               @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
 
@@ -253,7 +320,16 @@ public class UsersResource extends AbstractUserServerResource {
 
     // The ceiling is checked where the keys are written, not here. Checked against the copy this
     // request holds, it could pass while another request was adding a key of its own.
-    return respond(userService.addApiKey(CedarUserId.build(currentUser.getId()), newApiKey, MAX_API_KEYS));
+    BackendCallResult<CedarUser> result =
+        userService.addApiKey(CedarUserId.build(currentUser.getId()), newApiKey, MAX_API_KEYS);
+    if (result.isError()) {
+      return respond(result);
+    }
+    // Creating a sub-resource answers 201 with a Location, as group, category and artifact creation
+    // already do. The body stays the updated profile: the new key's secret value is only ever
+    // readable here, so replacing the profile with the key alone would take something away.
+    URI keyUri = uriInfo.getAbsolutePathBuilder().path(newApiKey.getId()).build();
+    return Response.created(keyUri).entity(profileOf(result)).build();
   }
 
   /**
@@ -267,7 +343,21 @@ public class UsersResource extends AbstractUserServerResource {
   @POST
   @Timed
   @Path("/{id}/api-keys/{keyId}/regenerate")
-  public Response regenerateApiKey(@PathParam(PP_ID) String uuid, @PathParam("keyId") String keyId)
+  @Operation(summary = "Regenerate an API key", description = "Atomically replaces one key's secret and creation "
+      + "time while preserving its stable management identifier and metadata. The previous secret is immediately "
+      + "revoked. Self-only. This command does not use If-Match.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "The updated user profile, including the rotated key",
+          content = @Content(schema = @Schema(implementation = CedarUser.class))),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", description = "User or key not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response regenerateApiKey(@Parameter(description = "CEDAR user UUID", required = true)
+                                   @PathParam(PP_ID) String uuid,
+                                   @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
+                                   @PathParam("keyId") String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -292,7 +382,22 @@ public class UsersResource extends AbstractUserServerResource {
   @DELETE
   @Timed
   @Path("/{id}/api-keys/{keyId}")
-  public Response deleteApiKey(@PathParam(PP_ID) String uuid, @PathParam("keyId") String keyId)
+  @Operation(summary = "Delete an API key", description = "Atomically removes one key from the current stored key "
+      + "list. Deleting the last enabled key is refused so the account retains a working credential. Self-only. "
+      + "This command does not use If-Match.")
+  @ApiResponses({
+      @ApiResponse(responseCode = "200", description = "The updated user profile",
+          content = @Content(schema = @Schema(implementation = CedarUser.class))),
+      @ApiResponse(responseCode = "400", description = "Deleting the key would leave no enabled credential"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", description = "User or key not found"),
+      @ApiResponse(responseCode = "500", description = "Internal server error")
+  })
+  public Response deleteApiKey(@Parameter(description = "CEDAR user UUID", required = true)
+                               @PathParam(PP_ID) String uuid,
+                               @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
+                               @PathParam("keyId") String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -332,10 +437,14 @@ public class UsersResource extends AbstractUserServerResource {
     if (callResult.isError()) {
       return CedarResponse.from(callResult);
     }
+    return Response.ok().entity(profileOf(callResult)).build();
+  }
+
+  /** The user profile as a client sees it, without the autogenerated Mongo id. */
+  private JsonNode profileOf(BackendCallResult<CedarUser> callResult) {
     JsonNode updatedUserNode = JsonMapper.MAPPER.valueToTree(callResult.getPayload());
-    // Remove autogenerated _id field to avoid exposing it
     MongoUtils.removeIdField(updatedUserNode);
-    return Response.ok().entity(updatedUserNode).build();
+    return updatedUserNode;
   }
 
   /**

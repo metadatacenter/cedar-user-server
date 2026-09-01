@@ -9,9 +9,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
+import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
+import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.model.SystemComponent;
+import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserRole;
+import org.metadatacenter.server.security.model.user.CedarUserUIPreferences;
+import org.metadatacenter.server.service.UserService;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.test.EmbeddedCedarNeo4j;
 import org.metadatacenter.util.test.TestAuthUtil;
@@ -40,12 +46,12 @@ public class UsersResourceNeo4jTest {
   static {
     // Must run before the test support boots the server, which reads the Neo4j env vars.
     // Redis is redirected to a dead port: queue writes are best-effort, and this enforces that
-    // no endpoint under test ever depends on a live Redis. Alternate server ports, so the test
+    // no endpoint under test ever depends on a live Redis. OS-assigned server ports, so the test
     // instance never collides with a running dev server.
     EmbeddedCedarNeo4j.startAndRedirectEnvironment(Map.of(
-        "CEDAR_USER_HTTP_PORT", "19005",
-        "CEDAR_USER_ADMIN_PORT", "19105",
-        "CEDAR_USER_STOP_PORT", "19205",
+        "CEDAR_USER_HTTP_PORT", "0",
+        "CEDAR_USER_ADMIN_PORT", "0",
+        "CEDAR_USER_STOP_PORT", "0",
         "CEDAR_REDIS_PERSISTENT_PORT", "1"));
   }
 
@@ -192,10 +198,18 @@ public class UsersResourceNeo4jTest {
    */
   @Test
   public void apiKeysAreCreatedRotatedAndRemovedThroughTheGraph() throws Exception {
+    // Identified by difference rather than by position. This method used to take the last key in
+    // the response as the one it had just created, while its own later step notes that other tests
+    // in this class add keys and the order between them is not fixed. When the graph returned the
+    // credential last, the test acted on the key it authenticates with and its guard failed.
+    List<String> beforeCreate = keyValues(send("GET", "/users/" + user1Uuid, null).body());
     HttpResponse<String> created = send("POST", keysPath(), "{\"description\": \"graph lifecycle\"}");
-    Assertions.assertEquals(200, created.statusCode(), created.body());
+    Assertions.assertEquals(201, created.statusCode(), created.body());
     List<String> afterCreate = keyValues(created.body());
-    String target = afterCreate.get(afterCreate.size() - 1);
+    List<String> addedByThisRequest = afterCreate.stream().filter(key -> !beforeCreate.contains(key)).toList();
+    Assertions.assertEquals(1, addedByThisRequest.size(),
+        "one POST must add exactly one key: " + created.body());
+    String target = addedByThisRequest.get(0);
     Assertions.assertNotEquals(authApiKey(), target, "the test must not act on its own credential");
     String targetId = keyIdForValue(created.body(), target);
     Assertions.assertNotEquals(target, targetId, "the management id must not be the secret");
@@ -261,7 +275,7 @@ public class UsersResourceNeo4jTest {
       }
       releaseTogether.countDown();
       for (Future<HttpResponse<String>> response : responses) {
-        Assertions.assertEquals(200, response.get(30, TimeUnit.SECONDS).statusCode());
+        Assertions.assertEquals(201, response.get(30, TimeUnit.SECONDS).statusCode());
       }
     } finally {
       pool.shutdownNow();
@@ -271,6 +285,55 @@ public class UsersResourceNeo4jTest {
     Assertions.assertEquals(beforeKeys.size() + concurrent, afterKeys.size(),
         "every concurrently created key should be stored, none overwritten: " + afterKeys);
     Assertions.assertTrue(afterKeys.containsAll(beforeKeys), "the keys held beforehand must survive");
+  }
+
+  @Test
+  public void internalUserWritesTouchOnlyTheirOwnedProperties() throws Exception {
+    UserService users = CedarDataServices.getInstance().getNeoUserService();
+    CedarUserId userId = CedarUserId.build(TestAuthUtil.getTestUser1(
+        CedarConfig.getInstance(CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER))).getId());
+    CedarUser before = users.findUser(userId);
+
+    String originalHomeFolder = before.getHomeFolderId();
+    List<CedarUserRole> originalRoles = new ArrayList<>(before.getRoles());
+    List<String> originalPermissions = new ArrayList<>(before.getPermissions());
+    String originalKeys = JsonMapper.MAPPER.writeValueAsString(before.getApiKeys());
+    CedarUserUIPreferences originalPreferences = JsonMapper.MAPPER.readValue(
+        JsonMapper.MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
+    String originalPreferencesJson = JsonMapper.MAPPER.writeValueAsString(originalPreferences);
+
+    try {
+      Assertions.assertFalse(users.setHomeFolderId(userId, "https://repo.metadatacenter.org/folders/atomic-test")
+          .isError());
+      CedarUser afterHomeFolder = users.findUser(userId);
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
+      Assertions.assertEquals(originalRoles, afterHomeFolder.getRoles());
+      Assertions.assertEquals(originalPermissions, afterHomeFolder.getPermissions());
+      Assertions.assertEquals(originalPreferencesJson,
+          JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
+
+      Assertions.assertFalse(users.replaceRolesAndPermissions(userId, List.of(), List.of()).isError());
+      CedarUser afterAuthorization = users.findUser(userId);
+      Assertions.assertTrue(afterAuthorization.getRoles().isEmpty());
+      Assertions.assertTrue(afterAuthorization.getPermissions().isEmpty());
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
+      Assertions.assertEquals(originalPreferencesJson,
+          JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
+
+      CedarUserUIPreferences replacementPreferences = JsonMapper.MAPPER.readValue(originalPreferencesJson,
+          CedarUserUIPreferences.class);
+      replacementPreferences.setStylesheet("atomic-test");
+      Assertions.assertFalse(users.replaceUiPreferences(userId, replacementPreferences).isError());
+      CedarUser afterPreferences = users.findUser(userId);
+      Assertions.assertEquals("atomic-test", afterPreferences.getUiPreferences().getStylesheet());
+      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
+      Assertions.assertTrue(afterPreferences.getRoles().isEmpty());
+      Assertions.assertTrue(afterPreferences.getPermissions().isEmpty());
+    } finally {
+      users.setHomeFolderId(userId, originalHomeFolder);
+      users.replaceRolesAndPermissions(userId, originalRoles, originalPermissions);
+      users.replaceUiPreferences(userId, originalPreferences);
+    }
   }
 
 }
