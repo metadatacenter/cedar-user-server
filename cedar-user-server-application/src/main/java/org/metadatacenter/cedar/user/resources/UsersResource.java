@@ -15,6 +15,7 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.FederatedIdentityRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.metadatacenter.util.http.CedarError;
 import org.metadatacenter.config.CedarConfig;
 import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarDependencyUnavailableException;
@@ -87,9 +88,9 @@ public class UsersResource extends AbstractUserServerResource {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "The current user's profile",
           content = @Content(schema = @Schema(implementation = CedarUser.class))),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Another user's profile was requested"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's profile was requested"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response findOwnUser(@Parameter(description = "CEDAR user UUID", required = true)
                               @PathParam(PP_ID) String uuid) throws CedarException {
@@ -125,11 +126,11 @@ public class UsersResource extends AbstractUserServerResource {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "User summary",
           content = @Content(schema = @Schema(type = "object"))),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Forbidden"),
-      @ApiResponse(responseCode = "404", description = "User not found"),
-      @ApiResponse(responseCode = "503", description = "Keycloak is unavailable"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Forbidden"),
+      @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User not found"),
+      @ApiResponse(responseCode = "503", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Keycloak is unavailable"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response findUserSummary(@Parameter(description = "CEDAR user UUID", required = true)
                                   @PathParam(PP_ID) String uuid) throws CedarException {
@@ -220,11 +221,11 @@ public class UsersResource extends AbstractUserServerResource {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "The updated user profile",
           content = @Content(schema = @Schema(implementation = CedarUser.class))),
-      @ApiResponse(responseCode = "400", description = "A modification is invalid or targets a non-preference field"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Another user's profile was targeted"),
-      @ApiResponse(responseCode = "404", description = "User not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "A modification is invalid or targets a non-preference field"),
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's profile was targeted"),
+      @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User not found"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response updateUser(@Parameter(description = "CEDAR user UUID", required = true)
                              @PathParam(PP_ID) String uuid) throws CedarException {
@@ -281,11 +282,11 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "201", description = "Created. Location names the new key; the body is the "
           + "updated user profile, which is the only place the new key's value is readable",
           content = @Content(schema = @Schema(implementation = CedarUser.class))),
-      @ApiResponse(responseCode = "400", description = "The user already has the maximum number of keys"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
-      @ApiResponse(responseCode = "404", description = "User not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "The user already has the maximum number of keys"),
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User not found"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response createApiKey(@Parameter(description = "CEDAR user UUID", required = true)
                                @PathParam(PP_ID) String uuid) throws CedarException {
@@ -349,10 +350,10 @@ public class UsersResource extends AbstractUserServerResource {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "The updated user profile, including the rotated key",
           content = @Content(schema = @Schema(implementation = CedarUser.class))),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
-      @ApiResponse(responseCode = "404", description = "User or key not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User or key not found"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response regenerateApiKey(@Parameter(description = "CEDAR user UUID", required = true)
                                    @PathParam(PP_ID) String uuid,
@@ -388,11 +389,11 @@ public class UsersResource extends AbstractUserServerResource {
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "The updated user profile",
           content = @Content(schema = @Schema(implementation = CedarUser.class))),
-      @ApiResponse(responseCode = "400", description = "Deleting the key would leave no enabled credential"),
-      @ApiResponse(responseCode = "401", description = "Unauthorized"),
-      @ApiResponse(responseCode = "403", description = "Another user's keys were targeted"),
-      @ApiResponse(responseCode = "404", description = "User or key not found"),
-      @ApiResponse(responseCode = "500", description = "Internal server error")
+      @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Deleting the key would leave no enabled credential"),
+      @ApiResponse(responseCode = "401", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Unauthorized"),
+      @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's keys were targeted"),
+      @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User or key not found"),
+      @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
   public Response deleteApiKey(@Parameter(description = "CEDAR user UUID", required = true)
                                @PathParam(PP_ID) String uuid,
