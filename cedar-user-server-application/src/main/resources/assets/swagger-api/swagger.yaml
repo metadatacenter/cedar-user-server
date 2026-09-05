@@ -9,7 +9,7 @@ info:
     commands over the current stored key list. These operations do not replace a caller-held user
     representation, so they do not use ETag or If-Match preconditions.
   title: CEDAR User Server API
-  version: 2.9.8-SNAPSHOT
+  version: 2.9.8
 paths:
   /users/{id}:
     get:
