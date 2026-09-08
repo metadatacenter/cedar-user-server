@@ -136,31 +136,19 @@
       </plugin>
 
       <!--
-        Generate stable JSON and YAML OpenAPI artifacts beside the other classpath assets. The
-        shared Dropwizard bootstrap serves swagger.json from this location at runtime.
+        Generates the OpenAPI 3.0 spec from the JAX-RS (jakarta.ws.rs) resource annotations. The
+        phase, output locations and format come from cedar-parent; this module names only the
+        package to scan. Info and the api_key security scheme come from the filtered
+        openapi-base.yaml.
       -->
       <plugin>
         <groupId>io.swagger.core.v3</groupId>
         <artifactId>swagger-maven-plugin-jakarta</artifactId>
         <configuration>
-          <outputPath>${project.basedir}/src/main/resources/assets/swagger-api</outputPath>
-          <outputFileName>swagger</outputFileName>
-          <outputFormat>JSONANDYAML</outputFormat>
-          <prettyPrint>true</prettyPrint>
-          <sortOutput>true</sortOutput>
           <resourcePackages>
             <package>org.metadatacenter.cedar.user.resources</package>
           </resourcePackages>
-          <openapiFilePath>${project.build.directory}/generated-swagger/openapi-base.yaml</openapiFilePath>
         </configuration>
-        <executions>
-          <execution>
-            <phase>prepare-package</phase>
-            <goals>
-              <goal>resolve</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
 
       <plugin>
