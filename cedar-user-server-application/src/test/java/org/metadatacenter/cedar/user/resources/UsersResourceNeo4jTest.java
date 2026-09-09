@@ -102,7 +102,7 @@ public class UsersResourceNeo4jTest {
   public void ownProfileIsServedFromTheGraph() throws Exception {
     HttpResponse<String> response = request("GET", null);
     Assertions.assertEquals(200, response.statusCode());
-    Assertions.assertEquals("Test1", JsonMapper.MAPPER.readTree(response.body()).get("firstName").asText());
+    Assertions.assertEquals("Test1", JsonMapper.STRICT_MAPPER.readTree(response.body()).get("firstName").asText());
   }
 
   @Test
@@ -112,7 +112,7 @@ public class UsersResourceNeo4jTest {
 
     HttpResponse<String> readBack = request("GET", null);
     Assertions.assertEquals("graph-test",
-        JsonMapper.MAPPER.readTree(readBack.body()).at("/uiPreferences/stylesheet").asText());
+        JsonMapper.STRICT_MAPPER.readTree(readBack.body()).at("/uiPreferences/stylesheet").asText());
   }
 
   @Test
@@ -155,14 +155,14 @@ public class UsersResourceNeo4jTest {
 
   private static List<String> keyValues(String responseBody) throws Exception {
     List<String> values = new ArrayList<>();
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       values.add(key.get("key").asText());
     }
     return values;
   }
 
   private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       if (keyValue.equals(key.get("key").asText())) {
         return key.get("id").asText();
       }
@@ -171,7 +171,7 @@ public class UsersResourceNeo4jTest {
   }
 
   private static String keyValueForId(String responseBody, String keyId) throws Exception {
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       if (keyId.equals(key.get("id").asText())) {
         return key.get("key").asText();
       }
@@ -297,36 +297,36 @@ public class UsersResourceNeo4jTest {
     String originalHomeFolder = before.getHomeFolderId();
     List<CedarUserRole> originalRoles = new ArrayList<>(before.getRoles());
     List<String> originalPermissions = new ArrayList<>(before.getPermissions());
-    String originalKeys = JsonMapper.MAPPER.writeValueAsString(before.getApiKeys());
-    CedarUserUIPreferences originalPreferences = JsonMapper.MAPPER.readValue(
-        JsonMapper.MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
-    String originalPreferencesJson = JsonMapper.MAPPER.writeValueAsString(originalPreferences);
+    String originalKeys = JsonMapper.STRICT_MAPPER.writeValueAsString(before.getApiKeys());
+    CedarUserUIPreferences originalPreferences = JsonMapper.STRICT_MAPPER.readValue(
+        JsonMapper.STRICT_MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
+    String originalPreferencesJson = JsonMapper.STRICT_MAPPER.writeValueAsString(originalPreferences);
 
     try {
       Assertions.assertFalse(users.setHomeFolderId(userId, "https://repo.metadatacenter.org/folders/atomic-test")
           .isError());
       CedarUser afterHomeFolder = users.findUser(userId);
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
       Assertions.assertEquals(originalRoles, afterHomeFolder.getRoles());
       Assertions.assertEquals(originalPermissions, afterHomeFolder.getPermissions());
       Assertions.assertEquals(originalPreferencesJson,
-          JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
+          JsonMapper.STRICT_MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
 
       Assertions.assertFalse(users.replaceRolesAndPermissions(userId, List.of(), List.of()).isError());
       CedarUser afterAuthorization = users.findUser(userId);
       Assertions.assertTrue(afterAuthorization.getRoles().isEmpty());
       Assertions.assertTrue(afterAuthorization.getPermissions().isEmpty());
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
       Assertions.assertEquals(originalPreferencesJson,
-          JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
+          JsonMapper.STRICT_MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
 
-      CedarUserUIPreferences replacementPreferences = JsonMapper.MAPPER.readValue(originalPreferencesJson,
+      CedarUserUIPreferences replacementPreferences = JsonMapper.STRICT_MAPPER.readValue(originalPreferencesJson,
           CedarUserUIPreferences.class);
       replacementPreferences.setStylesheet("atomic-test");
       Assertions.assertFalse(users.replaceUiPreferences(userId, replacementPreferences).isError());
       CedarUser afterPreferences = users.findUser(userId);
       Assertions.assertEquals("atomic-test", afterPreferences.getUiPreferences().getStylesheet());
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
       Assertions.assertTrue(afterPreferences.getRoles().isEmpty());
       Assertions.assertTrue(afterPreferences.getPermissions().isEmpty());
     } finally {
