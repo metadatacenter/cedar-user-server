@@ -48,7 +48,7 @@ import jakarta.ws.rs.core.Response;
 import java.security.SecureRandom;
 import java.net.URI;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -316,7 +316,7 @@ public class UsersResource extends AbstractUserServerResource {
     newApiKey.setKey(generateRandomApiKey());
     newApiKey.setServiceName("CEDAR");
     newApiKey.setDescription(description);
-    newApiKey.setCreationDate(LocalDateTime.now());
+    newApiKey.setCreationDate(OffsetDateTime.now());
     newApiKey.setEnabled(true);
 
     // The ceiling is checked where the keys are written, not here. Checked against the copy this
@@ -370,7 +370,7 @@ public class UsersResource extends AbstractUserServerResource {
     }
 
     return respond(userService.regenerateApiKey(CedarUserId.build(currentUser.getId()), keyId,
-        generateRandomApiKey(), LocalDateTime.now()));
+        generateRandomApiKey(), OffsetDateTime.now()));
   }
 
   /**
