@@ -215,8 +215,11 @@ public class UsersResource extends AbstractUserServerResource {
       + "preference changes to the current stored profile under a Neo4j write lock. Only uiPreferences fields are "
       + "accepted, and the write cannot overwrite API keys, roles, permissions, identity fields, or the home folder. "
       + "Because this is a field-level atomic patch rather than representation replacement, it does not use If-Match.")
-  @RequestBody(description = "An object whose keys are dotted uiPreferences paths",
+  @RequestBody(description = "An object whose keys are dotted uiPreferences paths. The keys are "
+      + "data rather than a declared set, so the object is open; each key must name a preference "
+      + "the stored profile already has, and anything else is refused.",
       required = true, content = @Content(schema = @Schema(type = "object",
+      additionalProperties = Schema.AdditionalPropertiesValue.TRUE,
       example = "{\"uiPreferences.stylesheet\":\"cedar-dark\",\"uiPreferences.preferredDateFormat\":\"YYYY-MM-DD\"}")))
   @ApiResponses({
       @ApiResponse(responseCode = "200", description = "The updated user profile",
@@ -277,7 +280,9 @@ public class UsersResource extends AbstractUserServerResource {
       + "current stored key list. Concurrent creations are serialized and all successful keys survive. Self-only; "
       + "a user may hold at most 20 keys. This command does not use If-Match.")
   @RequestBody(description = "Optional API-key description", required = false,
-      content = @Content(schema = @Schema(type = "object", example = "{\"description\":\"analysis pipeline\"}")))
+      content = @Content(schema = @Schema(type = "object",
+          additionalProperties = Schema.AdditionalPropertiesValue.FALSE,
+          example = "{\"description\":\"analysis pipeline\"}")))
   @ApiResponses({
       @ApiResponse(responseCode = "201", description = "Created. Location names the new key; the body is the "
           + "updated user profile, which is the only place the new key's value is readable",
@@ -300,7 +305,7 @@ public class UsersResource extends AbstractUserServerResource {
     }
 
     String description = null;
-    JsonNode body = c.request().getRequestBody().asJson();
+    JsonNode body = c.request().getRequestBody().mustHaveOnly("description").asJson();
     if (body != null && body.hasNonNull("description")) {
       String candidate = body.get("description").asText().trim();
       if (!candidate.isEmpty()) {

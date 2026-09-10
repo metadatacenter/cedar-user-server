@@ -407,6 +407,7 @@
             "*/*" : {
               "schema" : {
                 "type" : "object",
+                "additionalProperties" : true,
                 "example" : {
                   "uiPreferences.stylesheet" : "cedar-dark",
                   "uiPreferences.preferredDateFormat" : "YYYY-MM-DD"
@@ -414,7 +415,7 @@
               }
             }
           },
-          "description" : "An object whose keys are dotted uiPreferences paths",
+          "description" : "An object whose keys are dotted uiPreferences paths. The keys are data rather than a declared set, so the object is open; each key must name a preference the stored profile already has, and anything else is refused.",
           "required" : true
         },
         "responses" : {
@@ -504,6 +505,7 @@
             "*/*" : {
               "schema" : {
                 "type" : "object",
+                "additionalProperties" : false,
                 "example" : {
                   "description" : "analysis pipeline"
                 }
