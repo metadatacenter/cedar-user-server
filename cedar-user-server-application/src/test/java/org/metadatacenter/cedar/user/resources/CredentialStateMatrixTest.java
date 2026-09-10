@@ -104,10 +104,12 @@ public class CredentialStateMatrixTest {
     matrix.refused("a header in no scheme this server accepts", "Basic dXNlcjpwYXNzd29yZA==");
 
     matrix.when("GET", userPath).accepting(200);
-    // The summary reads federated identities from Keycloak, which no test environment runs, so an
-    // accepted credential reaches the route and is answered 404 by the lookup behind it. That is
-    // still the far side of authentication, which is what this row asserts.
-    matrix.when("GET", userPath + "/summary").accepting(200, 404);
+    // The summary reads federated identities from Keycloak, which no test environment runs, and how
+    // its absence shows depends on the host: a workstation that refuses the connection outright
+    // gives 404 from the not-found branch, and a runner where the connect attempt fails gives 503.
+    // Either way the credential reached the route, which is the far side of authentication and all
+    // this row claims about the accepted cell. The refusals on it are the assertion that matters.
+    matrix.when("GET", userPath + "/summary").accepting(200, 404, 503);
     matrix.when("PUT", userPath, "{\"uiPreferences.stylesheet\": \"credential-matrix\"}").accepting(200);
     matrix.when("POST", userPath + "/api-keys", "{\"description\": \"issued under the matrix\"}").accepting(201);
 
