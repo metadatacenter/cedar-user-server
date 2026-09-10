@@ -15,6 +15,7 @@ import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.model.SystemComponent;
 import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserApiKey;
 import org.metadatacenter.server.security.model.user.CedarUserRole;
 import org.metadatacenter.server.security.model.user.CedarUserUIPreferences;
 import org.metadatacenter.server.service.UserService;
@@ -23,12 +24,14 @@ import org.metadatacenter.util.test.EmbeddedCedarNeo4j;
 import org.metadatacenter.util.test.TestAuthUtil;
 
 import java.net.URI;
+import java.time.OffsetDateTime;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -285,6 +288,49 @@ public class UsersResourceNeo4jTest {
     Assertions.assertEquals(beforeKeys.size() + concurrent, afterKeys.size(),
         "every concurrently created key should be stored, none overwritten: " + afterKeys);
     Assertions.assertTrue(afterKeys.containsAll(beforeKeys), "the keys held beforehand must survive");
+  }
+
+  /**
+   * Disabling a key withdraws access. Authentication matches the secret against the stored key list,
+   * which holds the disabled keys too, so the flag has to be read where the match is made. It was not,
+   * and a key marked disabled still read its owner's profile — every one of that owner's live secrets
+   * included — and still created enabled keys of its own.
+   */
+  @Test
+  public void aDisabledApiKeyAuthenticatesNothing() throws Exception {
+    UserService users = CedarDataServices.getInstance().getNeoUserService();
+    CedarUserId userId = CedarUserId.build(TestAuthUtil.getTestUser1(
+        CedarConfig.getInstance(CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER))).getId());
+    CedarUserApiKey disabledKey = new CedarUserApiKey();
+    String keyId = UUID.randomUUID().toString();
+    disabledKey.setId(keyId);
+    disabledKey.setKey("disabled-" + UUID.randomUUID());
+    disabledKey.setServiceName("CEDAR");
+    disabledKey.setDescription("Withdrawn credential");
+    disabledKey.setCreationDate(OffsetDateTime.now());
+    disabledKey.setEnabled(false);
+    Assertions.assertFalse(users.addApiKey(userId, disabledKey, 20).isError());
+
+    try {
+      String disabledHeader = "apiKey " + disabledKey.getKey();
+      String userPath = "/users/" + user1Uuid;
+
+      Assertions.assertAll(
+          () -> Assertions.assertEquals(401, send("GET", userPath, null, disabledHeader).statusCode(),
+              "a disabled key read the profile it belongs to"),
+          () -> Assertions.assertEquals(401, send("GET", userPath + "/summary", null, disabledHeader).statusCode()),
+          () -> Assertions.assertEquals(401,
+              send("POST", keysPath(), "{\"description\": \"issued by a disabled key\"}", disabledHeader)
+                  .statusCode(),
+              "a disabled key issued a new key"),
+          () -> Assertions.assertEquals(200, send("GET", userPath, null, authHeaderUser1).statusCode(),
+              "the enabled credential must keep working"));
+
+      Assertions.assertTrue(keyValues(send("GET", userPath, null).body()).contains(disabledKey.getKey()),
+          "the disabled key is still the user's to see and to re-enable");
+    } finally {
+      users.deleteApiKey(userId, keyId);
+    }
   }
 
   @Test
