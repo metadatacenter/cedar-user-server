@@ -106,7 +106,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.forbidden()
           .id(id)
           .errorKey(CedarErrorKey.READ_OTHER_PROFILE_FORBIDDEN)
-          .errorMessage("You are not allowed to read other user's profile!")
+          .message("You are not allowed to read other user's profile!")
           .parameter("currentUserId", currentUser.getId())
           .build();
     }
@@ -150,7 +150,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.forbidden()
           .id(id)
           .errorKey(CedarErrorKey.READ_OTHER_PROFILE_FORBIDDEN)
-          .errorMessage("You are not allowed to read other user's profile!")
+          .message("You are not allowed to read other user's profile!")
           .parameter("currentUserId", currentUser.getId())
           .build();
     }
@@ -164,7 +164,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.notFound()
           .id(id)
           .errorKey(CedarErrorKey.USER_NOT_FOUND)
-          .errorMessage("The user can not be found by id!")
+          .message("The user can not be found by id!")
           .build();
     }
 
@@ -178,7 +178,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.notFound()
           .id(id)
           .errorKey(CedarErrorKey.USER_NOT_FOUND)
-          .errorMessage("The user can not be found by id!")
+          .message("The user can not be found by id!")
           .build();
     } catch (ProcessingException e) {
       throw new CedarDependencyUnavailableException("Keycloak is unavailable", e);
@@ -241,7 +241,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.forbidden()
           .id(id)
           .errorKey(CedarErrorKey.UPDATE_OTHER_PROFILE_FORBIDDEN)
-          .errorMessage("You are not allowed to update other user's profile!")
+          .message("You are not allowed to update other user's profile!")
           .parameter("currentUserId", currentUser.getId())
           .build();
     }
@@ -423,7 +423,7 @@ public class UsersResource extends AbstractUserServerResource {
       return CedarResponse.forbidden()
           .id(id)
           .errorKey(CedarErrorKey.UPDATE_OTHER_PROFILE_FORBIDDEN)
-          .errorMessage("You are not allowed to manage another user's API keys!")
+          .message("You are not allowed to manage another user's API keys!")
           .parameter("currentUserId", currentUser.getId())
           .build();
     }
