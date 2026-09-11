@@ -9,7 +9,7 @@ info:
     commands over the current stored key list. These operations do not replace a caller-held user
     representation, so they do not use ETag or If-Match preconditions.
   title: CEDAR User Server API
-  version: 2.9.10
+  version: 2.9.11
 paths:
   /:
     get:
@@ -280,10 +280,14 @@ paths:
           '*/*':
             schema:
               type: object
+              additionalProperties: true
               example:
                 uiPreferences.stylesheet: cedar-dark
                 uiPreferences.preferredDateFormat: YYYY-MM-DD
-        description: An object whose keys are dotted uiPreferences paths
+        description: "An object whose keys are dotted uiPreferences paths. The keys\
+          \ are data rather than a declared set, so the object is open; each key must\
+          \ name a preference the stored profile already has, and anything else is\
+          \ refused."
         required: true
       responses:
         "200":
@@ -346,6 +350,7 @@ paths:
           '*/*':
             schema:
               type: object
+              additionalProperties: false
               example:
                 description: analysis pipeline
         description: Optional API-key description
@@ -566,7 +571,7 @@ components:
   schemas:
     CedarError:
       type: object
-      additionalProperties: true
+      additionalProperties: false
       description: A CEDAR error response. Diagnostic fields are populated only when
         they are relevant to the failure.
       properties:
@@ -710,12 +715,9 @@ components:
           - doiCanNotBeSet
           - doiAlreadyExists
           - dataCiteDOIDisabled
+          - pinnedVersionUnavailable
           - resourceNotFound
           - internalError
-          nullable: true
-        errorMessage:
-          type: string
-          description: Alias of message retained for compatibility.
           nullable: true
         errorReasonKey:
           type: string

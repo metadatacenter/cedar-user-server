@@ -106,7 +106,7 @@ public class UsersResourceTest {
   public void ownProfileIsServed() throws Exception {
     HttpResponse<String> response = request("GET", user1Uuid, null);
     Assertions.assertEquals(200, response.statusCode());
-    JsonNode user = JsonMapper.MAPPER.readTree(response.body());
+    JsonNode user = JsonMapper.STRICT_MAPPER.readTree(response.body());
     Assertions.assertEquals("Test1", user.get("firstName").asText());
     Assertions.assertFalse(user.has("_id"), "The Mongo _id field must not be exposed");
   }
@@ -122,7 +122,7 @@ public class UsersResourceTest {
           "PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"unavailable\"}");
 
       Assertions.assertEquals(503, response.statusCode(), response.body());
-      JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+      JsonNode error = JsonMapper.STRICT_MAPPER.readTree(response.body());
       Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
       Assertions.assertEquals("Neo4j is unavailable", error.path("message").asText(), response.body());
       Assertions.assertTrue(error.path("originalException").isMissingNode()
@@ -193,7 +193,7 @@ public class UsersResourceTest {
     HttpResponse<String> response = get("/users/" + user1Uuid + "/summary", authHeaderUser1);
 
     Assertions.assertEquals(503, response.statusCode(), response.body());
-    JsonNode error = JsonMapper.MAPPER.readTree(response.body());
+    JsonNode error = JsonMapper.STRICT_MAPPER.readTree(response.body());
     Assertions.assertEquals("SERVICE_UNAVAILABLE", error.path("status").asText(), response.body());
     Assertions.assertEquals("Keycloak is unavailable", error.path("message").asText(), response.body());
     Assertions.assertTrue(error.path("originalException").isMissingNode()
@@ -237,14 +237,14 @@ public class UsersResourceTest {
 
   private static List<String> keyValues(String responseBody) throws Exception {
     List<String> values = new ArrayList<>();
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       values.add(key.get("key").asText());
     }
     return values;
   }
 
   private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       if (keyValue.equals(key.get("key").asText())) {
         return key.get("id").asText();
       }
@@ -279,7 +279,7 @@ public class UsersResourceTest {
     List<String> after = keyValues(created.body());
     Assertions.assertEquals(before.size() + 1, after.size(), created.body());
     Assertions.assertTrue(after.containsAll(before), "the existing keys must survive: " + created.body());
-    for (JsonNode key : JsonMapper.MAPPER.readTree(created.body()).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(created.body()).get("apiKeys")) {
       Assertions.assertTrue(key.hasNonNull("id"), "every API key must expose a management id: " + created.body());
       Assertions.assertNotEquals(key.get("key").asText(), key.get("id").asText(),
           "the management id must not be the secret: " + created.body());
@@ -309,7 +309,7 @@ public class UsersResourceTest {
     List<String> after = keyValues(rotated.body());
     Assertions.assertEquals(before.size(), after.size(), rotated.body());
     Assertions.assertFalse(after.contains(target), "the old value must be revoked: " + rotated.body());
-    Assertions.assertTrue(JsonMapper.MAPPER.readTree(rotated.body()).get("apiKeys").findValuesAsText("id")
+    Assertions.assertTrue(JsonMapper.STRICT_MAPPER.readTree(rotated.body()).get("apiKeys").findValuesAsText("id")
         .contains(targetId), "rotation must preserve the management id: " + rotated.body());
   }
 
@@ -347,7 +347,7 @@ public class UsersResourceTest {
   public void uiPreferencesCanBePatched() throws Exception {
     HttpResponse<String> response = request("PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"smoke-test\"}");
     Assertions.assertEquals(200, response.statusCode());
-    JsonNode user = JsonMapper.MAPPER.readTree(response.body());
+    JsonNode user = JsonMapper.STRICT_MAPPER.readTree(response.body());
     Assertions.assertEquals("smoke-test", user.at("/uiPreferences/stylesheet").asText());
   }
 

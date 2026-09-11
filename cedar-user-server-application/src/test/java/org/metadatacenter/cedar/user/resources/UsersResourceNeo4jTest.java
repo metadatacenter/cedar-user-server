@@ -15,6 +15,7 @@ import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
 import org.metadatacenter.id.CedarUserId;
 import org.metadatacenter.model.SystemComponent;
 import org.metadatacenter.server.security.model.user.CedarUser;
+import org.metadatacenter.server.security.model.user.CedarUserApiKey;
 import org.metadatacenter.server.security.model.user.CedarUserRole;
 import org.metadatacenter.server.security.model.user.CedarUserUIPreferences;
 import org.metadatacenter.server.service.UserService;
@@ -23,12 +24,14 @@ import org.metadatacenter.util.test.EmbeddedCedarNeo4j;
 import org.metadatacenter.util.test.TestAuthUtil;
 
 import java.net.URI;
+import java.time.OffsetDateTime;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -102,7 +105,7 @@ public class UsersResourceNeo4jTest {
   public void ownProfileIsServedFromTheGraph() throws Exception {
     HttpResponse<String> response = request("GET", null);
     Assertions.assertEquals(200, response.statusCode());
-    Assertions.assertEquals("Test1", JsonMapper.MAPPER.readTree(response.body()).get("firstName").asText());
+    Assertions.assertEquals("Test1", JsonMapper.STRICT_MAPPER.readTree(response.body()).get("firstName").asText());
   }
 
   @Test
@@ -112,7 +115,7 @@ public class UsersResourceNeo4jTest {
 
     HttpResponse<String> readBack = request("GET", null);
     Assertions.assertEquals("graph-test",
-        JsonMapper.MAPPER.readTree(readBack.body()).at("/uiPreferences/stylesheet").asText());
+        JsonMapper.STRICT_MAPPER.readTree(readBack.body()).at("/uiPreferences/stylesheet").asText());
   }
 
   @Test
@@ -155,14 +158,14 @@ public class UsersResourceNeo4jTest {
 
   private static List<String> keyValues(String responseBody) throws Exception {
     List<String> values = new ArrayList<>();
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       values.add(key.get("key").asText());
     }
     return values;
   }
 
   private static String keyIdForValue(String responseBody, String keyValue) throws Exception {
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       if (keyValue.equals(key.get("key").asText())) {
         return key.get("id").asText();
       }
@@ -171,7 +174,7 @@ public class UsersResourceNeo4jTest {
   }
 
   private static String keyValueForId(String responseBody, String keyId) throws Exception {
-    for (JsonNode key : JsonMapper.MAPPER.readTree(responseBody).get("apiKeys")) {
+    for (JsonNode key : JsonMapper.STRICT_MAPPER.readTree(responseBody).get("apiKeys")) {
       if (keyId.equals(key.get("id").asText())) {
         return key.get("key").asText();
       }
@@ -287,6 +290,49 @@ public class UsersResourceNeo4jTest {
     Assertions.assertTrue(afterKeys.containsAll(beforeKeys), "the keys held beforehand must survive");
   }
 
+  /**
+   * Disabling a key withdraws access. Authentication matches the secret against the stored key list,
+   * which holds the disabled keys too, so the flag has to be read where the match is made. It was not,
+   * and a key marked disabled still read its owner's profile — every one of that owner's live secrets
+   * included — and still created enabled keys of its own.
+   */
+  @Test
+  public void aDisabledApiKeyAuthenticatesNothing() throws Exception {
+    UserService users = CedarDataServices.getInstance().getNeoUserService();
+    CedarUserId userId = CedarUserId.build(TestAuthUtil.getTestUser1(
+        CedarConfig.getInstance(CedarEnvironmentVariableProvider.getFor(SystemComponent.SERVER_USER))).getId());
+    CedarUserApiKey disabledKey = new CedarUserApiKey();
+    String keyId = UUID.randomUUID().toString();
+    disabledKey.setId(keyId);
+    disabledKey.setKey("disabled-" + UUID.randomUUID());
+    disabledKey.setServiceName("CEDAR");
+    disabledKey.setDescription("Withdrawn credential");
+    disabledKey.setCreationDate(OffsetDateTime.now());
+    disabledKey.setEnabled(false);
+    Assertions.assertFalse(users.addApiKey(userId, disabledKey, 20).isError());
+
+    try {
+      String disabledHeader = "apiKey " + disabledKey.getKey();
+      String userPath = "/users/" + user1Uuid;
+
+      Assertions.assertAll(
+          () -> Assertions.assertEquals(401, send("GET", userPath, null, disabledHeader).statusCode(),
+              "a disabled key read the profile it belongs to"),
+          () -> Assertions.assertEquals(401, send("GET", userPath + "/summary", null, disabledHeader).statusCode()),
+          () -> Assertions.assertEquals(401,
+              send("POST", keysPath(), "{\"description\": \"issued by a disabled key\"}", disabledHeader)
+                  .statusCode(),
+              "a disabled key issued a new key"),
+          () -> Assertions.assertEquals(200, send("GET", userPath, null, authHeaderUser1).statusCode(),
+              "the enabled credential must keep working"));
+
+      Assertions.assertTrue(keyValues(send("GET", userPath, null).body()).contains(disabledKey.getKey()),
+          "the disabled key is still the user's to see and to re-enable");
+    } finally {
+      users.deleteApiKey(userId, keyId);
+    }
+  }
+
   @Test
   public void internalUserWritesTouchOnlyTheirOwnedProperties() throws Exception {
     UserService users = CedarDataServices.getInstance().getNeoUserService();
@@ -297,36 +343,36 @@ public class UsersResourceNeo4jTest {
     String originalHomeFolder = before.getHomeFolderId();
     List<CedarUserRole> originalRoles = new ArrayList<>(before.getRoles());
     List<String> originalPermissions = new ArrayList<>(before.getPermissions());
-    String originalKeys = JsonMapper.MAPPER.writeValueAsString(before.getApiKeys());
-    CedarUserUIPreferences originalPreferences = JsonMapper.MAPPER.readValue(
-        JsonMapper.MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
-    String originalPreferencesJson = JsonMapper.MAPPER.writeValueAsString(originalPreferences);
+    String originalKeys = JsonMapper.STRICT_MAPPER.writeValueAsString(before.getApiKeys());
+    CedarUserUIPreferences originalPreferences = JsonMapper.STRICT_MAPPER.readValue(
+        JsonMapper.STRICT_MAPPER.writeValueAsString(before.getUiPreferences()), CedarUserUIPreferences.class);
+    String originalPreferencesJson = JsonMapper.STRICT_MAPPER.writeValueAsString(originalPreferences);
 
     try {
       Assertions.assertFalse(users.setHomeFolderId(userId, "https://repo.metadatacenter.org/folders/atomic-test")
           .isError());
       CedarUser afterHomeFolder = users.findUser(userId);
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterHomeFolder.getApiKeys()));
       Assertions.assertEquals(originalRoles, afterHomeFolder.getRoles());
       Assertions.assertEquals(originalPermissions, afterHomeFolder.getPermissions());
       Assertions.assertEquals(originalPreferencesJson,
-          JsonMapper.MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
+          JsonMapper.STRICT_MAPPER.writeValueAsString(afterHomeFolder.getUiPreferences()));
 
       Assertions.assertFalse(users.replaceRolesAndPermissions(userId, List.of(), List.of()).isError());
       CedarUser afterAuthorization = users.findUser(userId);
       Assertions.assertTrue(afterAuthorization.getRoles().isEmpty());
       Assertions.assertTrue(afterAuthorization.getPermissions().isEmpty());
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterAuthorization.getApiKeys()));
       Assertions.assertEquals(originalPreferencesJson,
-          JsonMapper.MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
+          JsonMapper.STRICT_MAPPER.writeValueAsString(afterAuthorization.getUiPreferences()));
 
-      CedarUserUIPreferences replacementPreferences = JsonMapper.MAPPER.readValue(originalPreferencesJson,
+      CedarUserUIPreferences replacementPreferences = JsonMapper.STRICT_MAPPER.readValue(originalPreferencesJson,
           CedarUserUIPreferences.class);
       replacementPreferences.setStylesheet("atomic-test");
       Assertions.assertFalse(users.replaceUiPreferences(userId, replacementPreferences).isError());
       CedarUser afterPreferences = users.findUser(userId);
       Assertions.assertEquals("atomic-test", afterPreferences.getUiPreferences().getStylesheet());
-      Assertions.assertEquals(originalKeys, JsonMapper.MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
+      Assertions.assertEquals(originalKeys, JsonMapper.STRICT_MAPPER.writeValueAsString(afterPreferences.getApiKeys()));
       Assertions.assertTrue(afterPreferences.getRoles().isEmpty());
       Assertions.assertTrue(afterPreferences.getPermissions().isEmpty());
     } finally {
