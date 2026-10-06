@@ -6,7 +6,9 @@ import io.dropwizard.testing.ResourceHelpers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
@@ -16,6 +18,8 @@ import org.metadatacenter.config.environment.CedarEnvironmentVariableProvider;
 import org.metadatacenter.model.SystemComponent;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.test.TestAuthUtil;
+import org.metadatacenter.util.test.RouteSurface;
+import org.metadatacenter.util.test.TestHttpClient;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * Endpoint tests for the user profile resource, running with no live backend: authentication and
@@ -86,6 +91,43 @@ public class UsersResourceTest {
 
   private static String lastSegment(String id) {
     return id.substring(id.lastIndexOf('/') + 1);
+  }
+
+  @TestFactory
+  Stream<DynamicTest> everyBusinessRouteRequiresUserCredentials() {
+    var config = SERVER.getEnvironment().jersey().getResourceConfig();
+    List<Object> components = new ArrayList<>();
+    components.addAll(config.getInstances());
+    components.addAll(config.getSingletons());
+    components.addAll(config.getClasses());
+    components.addAll(config.getResources());
+    // Shared index, health and diagnostic resources are outside this package. No business route
+    // is public; new registered resource classes and methods join the probes automatically.
+    List<Class<?>> resources = RouteSurface.registeredResourceClasses(components,
+        "org.metadatacenter.cedar.user.resources");
+    Assertions.assertTrue(resources.contains(UsersResource.class),
+        "UsersResource must remain registered: " + resources);
+    List<RouteSurface.Endpoint> endpoints = RouteSurface.endpoints(resources);
+    Assertions.assertFalse(endpoints.isEmpty(), "The authentication inventory must not be empty");
+    Assertions.assertEquals(endpoints.size(), endpoints.stream().map(RouteSurface.Endpoint::key).distinct().count(),
+        "Business endpoints must have unique method/path identities");
+    return endpoints.stream().flatMap(endpoint -> Stream.of(false, true).map(invalidCredential ->
+        DynamicTest.dynamicTest(endpoint.key() + (invalidCredential ? " / invalid user" : " / missing user"), () -> {
+          // Use actual UUID-shaped path parameters so a binding error cannot stand in for auth.
+          String path = endpoint.fullPath.replace("{id}", user1Uuid)
+              .replace("{keyId}", "00000000-0000-0000-0000-000000000000");
+          HttpRequest.Builder builder = HttpRequest.newBuilder()
+              .uri(URI.create("http://127.0.0.1:" + SERVER.getLocalPort() + path))
+              .timeout(Duration.ofSeconds(5))
+              .header("Content-Type", RouteSurface.contentTypeFor(endpoint));
+          if (invalidCredential) {
+            builder.header("Authorization", "apiKey 00000000-0000-0000-0000-000000000000");
+          }
+          boolean hasBody = List.of("POST", "PUT", "PATCH").contains(endpoint.verb);
+          builder.method(endpoint.verb, hasBody ? HttpRequest.BodyPublishers.ofString("{}")
+              : HttpRequest.BodyPublishers.noBody());
+          Assertions.assertEquals(401, TestHttpClient.send(builder.build()).statusCode(), endpoint.key());
+        })));
   }
 
   private HttpResponse<String> request(String method, String uuid, String body) throws Exception {
