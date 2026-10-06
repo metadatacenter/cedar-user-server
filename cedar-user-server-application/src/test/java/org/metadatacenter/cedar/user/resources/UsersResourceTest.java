@@ -19,9 +19,11 @@ import org.metadatacenter.model.SystemComponent;
 import org.metadatacenter.util.json.JsonMapper;
 import org.metadatacenter.util.test.TestAuthUtil;
 import org.metadatacenter.util.test.RouteSurface;
+import org.metadatacenter.util.test.ResourceRegistration;
 import org.metadatacenter.util.test.TestHttpClient;
 
 import java.net.URI;
+import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -94,7 +96,7 @@ public class UsersResourceTest {
   }
 
   @TestFactory
-  Stream<DynamicTest> everyBusinessRouteRequiresUserCredentials() {
+  Stream<DynamicTest> everyBusinessRouteRequiresUserCredentials() throws IOException {
     var config = SERVER.getEnvironment().jersey().getResourceConfig();
     List<Object> components = new ArrayList<>();
     components.addAll(config.getInstances());
@@ -103,10 +105,8 @@ public class UsersResourceTest {
     components.addAll(config.getResources());
     // Shared index, health and diagnostic resources are outside this package. No business route
     // is public; new registered resource classes and methods join the probes automatically.
-    List<Class<?>> resources = RouteSurface.registeredResourceClasses(components,
-        "org.metadatacenter.cedar.user.resources");
-    Assertions.assertTrue(resources.contains(UsersResource.class),
-        "UsersResource must remain registered: " + resources);
+    List<Class<?>> resources = ResourceRegistration.assertComplete(UserServerApplication.class,
+        "org.metadatacenter.cedar.user.resources", components);
     List<RouteSurface.Endpoint> endpoints = RouteSurface.endpoints(resources);
     Assertions.assertFalse(endpoints.isEmpty(), "The authentication inventory must not be empty");
     Assertions.assertEquals(endpoints.size(), endpoints.stream().map(RouteSurface.Endpoint::key).distinct().count(),
