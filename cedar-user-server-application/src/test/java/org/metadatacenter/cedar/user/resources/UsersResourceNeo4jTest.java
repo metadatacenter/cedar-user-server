@@ -6,6 +6,7 @@ import io.dropwizard.testing.ResourceHelpers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.metadatacenter.cedar.user.UserServerApplication;
 import org.metadatacenter.cedar.user.UserServerConfiguration;
@@ -44,6 +45,7 @@ import java.util.concurrent.TimeUnit;
  * uiPreferences patch round-trips through the real Cypher layer. The in-memory variant
  * (UsersResourceTest) covers the same rules faster; this class proves the storage path.
  */
+@Tag("integration")
 public class UsersResourceNeo4jTest {
 
   static {
