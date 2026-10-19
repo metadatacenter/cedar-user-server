@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.metadatacenter.bridge.CedarDataServices;
@@ -42,6 +43,7 @@ import java.util.stream.Stream;
  * success response needs a live Keycloak; this fixture covers its authorization, not-found and
  * unavailable-Keycloak responses.
  */
+@Tag("integration")
 public class UsersResourceTest {
 
   static {

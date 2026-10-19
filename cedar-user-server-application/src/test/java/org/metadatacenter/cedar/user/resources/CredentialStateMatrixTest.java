@@ -5,6 +5,7 @@ import io.dropwizard.testing.ResourceHelpers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.metadatacenter.bridge.CedarDataServices;
 import org.metadatacenter.cedar.user.UserServerApplication;
@@ -35,6 +36,7 @@ import java.util.UUID;
  * installs. That is the whole point. The in-memory service read the enabled flag when the stored one
  * did not, so a matrix run against the double would have passed throughout.
  */
+@Tag("integration")
 public class CredentialStateMatrixTest {
 
   static {
