@@ -1105,6 +1105,9 @@
           },
           "useMetadataEditorV2" : {
             "type" : "boolean"
+          },
+          "workspace" : {
+            "$ref" : "#/components/schemas/CedarUserUIWorkspace"
           }
         }
       },
@@ -1148,6 +1151,49 @@
         "properties" : {
           "templateJsonViewer" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "CedarUserUIWorkspace" : {
+        "type" : "object",
+        "properties" : {
+          "foldersFirst" : {
+            "type" : "boolean"
+          },
+          "modified" : {
+            "type" : "string",
+            "enum" : [ "today", "week", "month", "year", "last-year", "custom" ]
+          },
+          "modifiedAfter" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "modifiedBefore" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "resourceTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "folder", "field", "element", "template", "instance" ]
+            }
+          },
+          "sortBy" : {
+            "type" : "string",
+            "enum" : [ "name", "createdOnTS", "lastUpdatedOnTS" ]
+          },
+          "sortDirection" : {
+            "type" : "string",
+            "enum" : [ "asc", "desc" ]
+          },
+          "version" : {
+            "type" : "string",
+            "enum" : [ "latest", "latest-by-status", "all" ]
+          },
+          "viewMode" : {
+            "type" : "string",
+            "enum" : [ "grid", "list" ]
           }
         }
       }
