@@ -121,6 +121,22 @@ public class UsersResourceNeo4jTest {
   }
 
   @Test
+  public void theWorkspaceListingRoundTripsThroughTheGraph() throws Exception {
+    String listing = "{\"resourceTypes\":[\"template\"],\"modified\":\"custom\",\"modifiedAfter\":\"2026-10-01\","
+        + "\"modifiedBefore\":\"2026-10-23\",\"version\":\"latest\",\"sortBy\":\"lastUpdatedOnTS\","
+        + "\"sortDirection\":\"desc\",\"foldersFirst\":true,\"viewMode\":\"list\"}";
+    HttpResponse<String> updated = request("PUT", "{\"uiPreferences.workspace\": " + listing + "}");
+    Assertions.assertEquals(200, updated.statusCode(), updated.body());
+
+    HttpResponse<String> readBack = request("GET", null);
+    Assertions.assertEquals(JsonMapper.STRICT_MAPPER.readTree(listing),
+        JsonMapper.STRICT_MAPPER.readTree(readBack.body()).at("/uiPreferences/workspace"));
+
+    HttpResponse<String> refused = request("PUT", "{\"uiPreferences.workspace\": {\"viewMode\": \"tiles\"}}");
+    Assertions.assertEquals(400, refused.statusCode());
+  }
+
+  @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
     Assertions.assertEquals(400, response.statusCode());

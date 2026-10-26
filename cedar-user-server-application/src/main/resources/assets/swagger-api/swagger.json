@@ -3,7 +3,7 @@
   "info" : {
     "description" : "CEDAR user profile and API-key management.\n\nThe profile update endpoint accepts a field-level UI-preferences patch despite its historical\nPUT method. The server locks and rereads the stored profile, applies only the requested settings,\nand writes only UI preferences. API-key creation, rotation, and deletion are likewise atomic\ncommands over the current stored key list. These operations do not replace a caller-held user\nrepresentation, so they do not use ETag or If-Match preconditions.\n",
     "title" : "CEDAR User Server API",
-    "version" : "2.9.28"
+    "version" : "2.9.29"
   },
   "paths" : {
     "/" : {
@@ -1105,6 +1105,9 @@
           },
           "useMetadataEditorV2" : {
             "type" : "boolean"
+          },
+          "workspace" : {
+            "$ref" : "#/components/schemas/CedarUserUIWorkspace"
           }
         }
       },
@@ -1148,6 +1151,49 @@
         "properties" : {
           "templateJsonViewer" : {
             "type" : "boolean"
+          }
+        }
+      },
+      "CedarUserUIWorkspace" : {
+        "type" : "object",
+        "properties" : {
+          "foldersFirst" : {
+            "type" : "boolean"
+          },
+          "modified" : {
+            "type" : "string",
+            "enum" : [ "today", "week", "month", "year", "last-year", "custom" ]
+          },
+          "modifiedAfter" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "modifiedBefore" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "resourceTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "folder", "field", "element", "template", "instance" ]
+            }
+          },
+          "sortBy" : {
+            "type" : "string",
+            "enum" : [ "name", "createdOnTS", "lastUpdatedOnTS" ]
+          },
+          "sortDirection" : {
+            "type" : "string",
+            "enum" : [ "asc", "desc" ]
+          },
+          "version" : {
+            "type" : "string",
+            "enum" : [ "latest", "latest-by-status", "all" ]
+          },
+          "viewMode" : {
+            "type" : "string",
+            "enum" : [ "grid", "list" ]
           }
         }
       }
