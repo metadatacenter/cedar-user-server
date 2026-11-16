@@ -18,11 +18,11 @@
     <!-- Opt in to the cedar-shade execution managed in cedar-parent. -->
     <cedar.shade.phase>package</cedar.shade.phase>
     <cedar.shade.main.class>org.metadatacenter.cedar.user.UserServerApplication</cedar.shade.main.class>
-    <!-- Line coverage measured on 2026-10-19: 83.0% in CI and 86.7% locally. The floor follows
-         the lower figure, and the build fails below it. -->
-    <cedar.coverage.line.minimum>0.81</cedar.coverage.line.minimum>
-    <!-- Branch coverage measured on 2026-10-26: 76.3%. The build fails below this floor. -->
-    <cedar.coverage.branch.minimum>0.74</cedar.coverage.branch.minimum>
+    <!-- Line coverage measured on 2026-11-16: 97.6%. Keycloak is a local stub in the suite, so the
+         figure no longer depends on what the host can reach. The build fails below this floor. -->
+    <cedar.coverage.line.minimum>0.95</cedar.coverage.line.minimum>
+    <!-- Branch coverage measured on 2026-11-16: 84.2%. The build fails below this floor. -->
+    <cedar.coverage.branch.minimum>0.82</cedar.coverage.branch.minimum>
   </properties>
 
   <dependencies>
