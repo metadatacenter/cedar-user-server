@@ -189,8 +189,11 @@ public class UsersResourceNeo4jTest {
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
+    String before = request("GET", null).body();
     HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
-    Assertions.assertEquals(400, response.statusCode());
+    Assertions.assertEquals(400, response.statusCode(), response.body());
+    Assertions.assertEquals(before, request("GET", null).body(),
+        "the refused change must have left the profile as it was");
   }
 
   private HttpResponse<String> send(String method, String path, String body) throws Exception {

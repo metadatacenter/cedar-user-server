@@ -397,8 +397,11 @@ public class UsersResourceTest {
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
+    String before = send("GET", "/users/" + user1Uuid, null).body();
     HttpResponse<String> response = request("PUT", user1Uuid, "{\"firstName\": \"Changed\"}");
-    Assertions.assertEquals(400, response.statusCode());
+    Assertions.assertEquals(400, response.statusCode(), response.body());
+    Assertions.assertEquals(before, send("GET", "/users/" + user1Uuid, null).body(),
+        "the refused change must have left the profile as it was");
   }
 
 }
