@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,8 +24,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Answers the two Keycloak calls the user summary makes: the admin client's password grant and the
  * read of one user. The user server builds its Keycloak address as {@code https://auth.${CEDAR_HOST}},
- * so the stub serves TLS, and {@link #environment()} points {@code CEDAR_HOST} at {@code localhost} on
- * the stub's port, since every name under {@code .localhost} is the loopback address. The certificate
+ * so the stub serves TLS on 127.0.0.1, and {@link #environment()} points {@code CEDAR_HOST} at
+ * {@code localhost} on the stub's port, since every name under {@code .localhost} is the loopback
+ * address. The certificate
  * is generated for each run and trusted through the development opt-in the configuration already has.
  *
  * <p>A suite pointed here never reaches a developer's Keycloak, and the summary's success and
@@ -44,11 +46,11 @@ final class KeycloakStub implements AutoCloseable {
   }
 
   static KeycloakStub start() throws Exception {
-    InetAddress loopback = InetAddress.getByName("auth.localhost");
-    if (!loopback.isLoopbackAddress()) {
-      throw new IllegalStateException("auth.localhost resolves to " + loopback + ", not to the loopback address");
+    InetAddress ipv4Loopback = InetAddress.getByName("127.0.0.1");
+    if (!Arrays.asList(InetAddress.getAllByName("auth.localhost")).contains(ipv4Loopback)) {
+      throw new IllegalStateException("auth.localhost does not resolve to 127.0.0.1, where the stub listens");
     }
-    HttpsServer server = HttpsServer.create(new InetSocketAddress(0), 0);
+    HttpsServer server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.setHttpsConfigurator(new HttpsConfigurator(sslContext()));
     KeycloakStub stub = new KeycloakStub(server);
     server.createContext("/", stub::handle);
