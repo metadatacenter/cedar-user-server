@@ -53,7 +53,6 @@ public class CredentialStateMatrixTest {
     Map<String, String> environment = new HashMap<>(KEYCLOAK.environment());
     environment.put("CEDAR_USER_HTTP_PORT", "0");
     environment.put("CEDAR_USER_ADMIN_PORT", "0");
-    environment.put("CEDAR_USER_STOP_PORT", "0");
     environment.put("CEDAR_REDIS_PERSISTENT_PORT", "1");
     EmbeddedCedarNeo4j.startAndRedirectEnvironment(environment);
   }
