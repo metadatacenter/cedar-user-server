@@ -30,6 +30,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,16 +49,24 @@ import java.util.concurrent.TimeUnit;
 @Tag("integration")
 public class UsersResourceNeo4jTest {
 
+  private static final KeycloakStub KEYCLOAK;
+
   static {
     // Must run before the test support boots the server, which reads the Neo4j env vars.
     // Redis is redirected to a dead port: queue writes are best-effort, and this enforces that
     // no endpoint under test ever depends on a live Redis. OS-assigned server ports, so the test
     // instance never collides with a running dev server.
-    EmbeddedCedarNeo4j.startAndRedirectEnvironment(Map.of(
-        "CEDAR_USER_HTTP_PORT", "0",
-        "CEDAR_USER_ADMIN_PORT", "0",
-        "CEDAR_USER_STOP_PORT", "0",
-        "CEDAR_REDIS_PERSISTENT_PORT", "1"));
+    // Keycloak is a local stub, so the summary's answers run on every machine.
+    try {
+      KEYCLOAK = KeycloakStub.start();
+    } catch (Exception e) {
+      throw new ExceptionInInitializerError(e);
+    }
+    Map<String, String> environment = new HashMap<>(KEYCLOAK.environment());
+    environment.put("CEDAR_USER_HTTP_PORT", "0");
+    environment.put("CEDAR_USER_ADMIN_PORT", "0");
+    environment.put("CEDAR_REDIS_PERSISTENT_PORT", "1");
+    EmbeddedCedarNeo4j.startAndRedirectEnvironment(environment);
   }
 
   public static final DropwizardTestSupport<UserServerConfiguration> SERVER =
@@ -67,7 +76,9 @@ public class UsersResourceNeo4jTest {
 
   private static String authHeaderUser1;
   private static String authHeaderUser2;
+  private static String authHeaderAdmin;
   private static String user1Uuid;
+  private static String user2Uuid;
 
   @BeforeAll
   public static void oneTimeSetUp() throws Exception {
@@ -81,13 +92,52 @@ public class UsersResourceNeo4jTest {
 
     authHeaderUser1 = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
     authHeaderUser2 = TestAuthUtil.getTestUser2AuthHeader(cedarConfig);
+    authHeaderAdmin = TestAuthUtil.getAdminUserAuthHeader(cedarConfig);
     String user1Id = TestAuthUtil.getTestUser1(cedarConfig).getId();
     user1Uuid = user1Id.substring(user1Id.lastIndexOf('/') + 1);
+    String user2Id = TestAuthUtil.getTestUser2(cedarConfig).getId();
+    user2Uuid = user2Id.substring(user2Id.lastIndexOf('/') + 1);
+    KEYCLOAK.holdUser(user1Uuid, 1_600_000_000_000L, "orcid", "0000-0002-1825-0097");
   }
 
   @AfterAll
   public static void oneTimeTearDown() {
     SERVER.after();
+    KEYCLOAK.close();
+  }
+
+  private HttpResponse<String> get(String path, String authHeader) throws Exception {
+    return CLIENT.send(HttpRequest.newBuilder()
+        .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + path))
+        .header("Authorization", authHeader).GET().build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  /**
+   * The summary joins the profile CEDAR stores with the account Keycloak holds: the display name from
+   * the graph, and the creation time and each linked identity provider from Keycloak.
+   */
+  @Test
+  public void theSummaryJoinsTheStoredProfileWithTheKeycloakAccount() throws Exception {
+    HttpResponse<String> response = get("/users/" + user1Uuid + "/summary", authHeaderUser1);
+    Assertions.assertEquals(200, response.statusCode(), response.body());
+    JsonNode summary = JsonMapper.STRICT_MAPPER.readTree(response.body());
+    Assertions.assertTrue(summary.path("userId").asText().endsWith("/" + user1Uuid), response.body());
+    Assertions.assertEquals("Test1 User", summary.path("screenName").asText(), response.body());
+    Assertions.assertEquals(1_600_000_000_000L, summary.path("createdTimestamp").asLong(), response.body());
+    Assertions.assertEquals(1, summary.path("authenticationProvider").size(), response.body());
+    Assertions.assertEquals("orcid", summary.at("/authenticationProvider/0/name").asText(), response.body());
+    Assertions.assertEquals("0000-0002-1825-0097", summary.at("/authenticationProvider/0/id").asText(),
+        response.body());
+  }
+
+  /** A user CEDAR stores and Keycloak does not hold is not found, with CEDAR's error body. */
+  @Test
+  public void aUserKeycloakDoesNotHoldIsNotFound() throws Exception {
+    HttpResponse<String> response = get("/users/" + user2Uuid + "/summary", authHeaderAdmin);
+    Assertions.assertEquals(404, response.statusCode(), response.body());
+    Assertions.assertEquals("userNotFound", JsonMapper.STRICT_MAPPER.readTree(response.body()).path("errorKey").asText(),
+        response.body());
+    Assertions.assertTrue(KEYCLOAK.wasAskedFor(user2Uuid), "the lookup must have reached Keycloak");
   }
 
   private HttpResponse<String> request(String method, String body) throws Exception {
@@ -138,8 +188,11 @@ public class UsersResourceNeo4jTest {
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
+    String before = request("GET", null).body();
     HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
-    Assertions.assertEquals(400, response.statusCode());
+    Assertions.assertEquals(400, response.statusCode(), response.body());
+    Assertions.assertEquals(before, request("GET", null).body(),
+        "the refused change must have left the profile as it was");
   }
 
   private HttpResponse<String> send(String method, String path, String body) throws Exception {

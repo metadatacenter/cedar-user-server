@@ -21,6 +21,7 @@ import org.metadatacenter.util.test.EmbeddedCedarNeo4j;
 import org.metadatacenter.util.test.TestAuthUtil;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -39,12 +40,21 @@ import java.util.UUID;
 @Tag("integration")
 public class CredentialStateMatrixTest {
 
+  private static final KeycloakStub KEYCLOAK;
+
   static {
-    EmbeddedCedarNeo4j.startAndRedirectEnvironment(Map.of(
-        "CEDAR_USER_HTTP_PORT", "0",
-        "CEDAR_USER_ADMIN_PORT", "0",
-        "CEDAR_USER_STOP_PORT", "0",
-        "CEDAR_REDIS_PERSISTENT_PORT", "1"));
+    // Keycloak is a local stub, so the summary row reaches the same answer on every machine instead
+    // of whatever Keycloak the host's CEDAR_HOST names.
+    try {
+      KEYCLOAK = KeycloakStub.start();
+    } catch (Exception e) {
+      throw new ExceptionInInitializerError(e);
+    }
+    Map<String, String> environment = new HashMap<>(KEYCLOAK.environment());
+    environment.put("CEDAR_USER_HTTP_PORT", "0");
+    environment.put("CEDAR_USER_ADMIN_PORT", "0");
+    environment.put("CEDAR_REDIS_PERSISTENT_PORT", "1");
+    EmbeddedCedarNeo4j.startAndRedirectEnvironment(environment);
   }
 
   public static final DropwizardTestSupport<UserServerConfiguration> SERVER =
@@ -65,6 +75,7 @@ public class CredentialStateMatrixTest {
     workingHeader = TestAuthUtil.getTestUser1AuthHeader(cedarConfig);
     String user1Id = TestAuthUtil.getTestUser1(cedarConfig).getId();
     user1Uuid = user1Id.substring(user1Id.lastIndexOf('/') + 1);
+    KEYCLOAK.holdUser(user1Uuid, 1_600_000_000_000L, "orcid", "0000-0002-1825-0097");
 
     UserService users = CedarDataServices.getInstance().getNeoUserService();
     CedarUserId userId = CedarUserId.build(user1Id);
@@ -90,6 +101,7 @@ public class CredentialStateMatrixTest {
   @AfterAll
   public static void oneTimeTearDown() {
     SERVER.after();
+    KEYCLOAK.close();
   }
 
   @Test
@@ -106,12 +118,7 @@ public class CredentialStateMatrixTest {
     matrix.refused("a header in no scheme this server accepts", "Basic dXNlcjpwYXNzd29yZA==");
 
     matrix.when("GET", userPath).accepting(200);
-    // The summary reads federated identities from Keycloak, which no test environment runs, and how
-    // its absence shows depends on the host: a workstation that refuses the connection outright
-    // gives 404 from the not-found branch, and a runner where the connect attempt fails gives 503.
-    // Either way the credential reached the route, which is the far side of authentication and all
-    // this row claims about the accepted cell. The refusals on it are the assertion that matters.
-    matrix.when("GET", userPath + "/summary").accepting(200, 404, 503);
+    matrix.when("GET", userPath + "/summary").accepting(200);
     matrix.when("PUT", userPath, "{\"uiPreferences.stylesheet\": \"credential-matrix\"}").accepting(200);
     matrix.when("POST", userPath + "/api-keys", "{\"description\": \"issued under the matrix\"}").accepting(201);
 
