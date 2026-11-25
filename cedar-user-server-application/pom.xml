@@ -130,19 +130,6 @@
 
     <plugins>
 
-      <!--
-        The tests redirect the CEDAR environment variables (embedded Neo4j, alternate server
-        ports) through a CedarEnvironmentSource override instead of reflective environment
-        rewriting, so no add-opens flags are needed and the test classes share a JVM
-        (reuseForks true): CedarConfig.getInstance rebuilds whenever the override changes.
-      -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <reuseForks>true</reuseForks>
-        </configuration>
-      </plugin>
 
       <!-- Filter the base document so the generated specification carries the Maven version. -->
       <plugin>
