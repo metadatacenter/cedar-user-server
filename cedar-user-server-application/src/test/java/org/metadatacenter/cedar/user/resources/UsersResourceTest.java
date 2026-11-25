@@ -162,7 +162,7 @@ public class UsersResourceTest {
     UsersResource.injectUserService(CedarDataServices.getInstance().getNeoUserService());
     try {
       HttpResponse<String> response = request(
-          "PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"unavailable\"}");
+          "PATCH", user1Uuid, "{\"uiPreferences.stylesheet\": \"unavailable\"}");
 
       Assertions.assertEquals(503, response.statusCode(), response.body());
       JsonNode error = JsonMapper.STRICT_MAPPER.readTree(response.body());
@@ -187,7 +187,7 @@ public class UsersResourceTest {
 
   @Test
   public void otherProfileUpdateIsForbidden() throws Exception {
-    HttpResponse<String> response = request("PUT", user2Uuid, "{}");
+    HttpResponse<String> response = request("PATCH", user2Uuid, "{}");
     Assertions.assertEquals(403, response.statusCode());
   }
 
@@ -271,7 +271,7 @@ public class UsersResourceTest {
     String user1Path = "/users/" + user1Uuid;
     Assertions.assertAll(
         () -> assertForbiddenForUser2("GET", user1Path, null),
-        () -> assertForbiddenForUser2("PUT", user1Path, "{}"),
+        () -> assertForbiddenForUser2("PATCH", user1Path, "{}"),
         () -> assertForbiddenForUser2("GET", user1Path + "/summary", null),
         () -> assertForbiddenForUser2("POST", user1Path + "/api-keys", "{}"),
         () -> assertForbiddenForUser2("POST", user1Path + "/api-keys/not-the-users-key/regenerate", null),
@@ -388,16 +388,29 @@ public class UsersResourceTest {
 
   @Test
   public void uiPreferencesCanBePatched() throws Exception {
-    HttpResponse<String> response = request("PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"smoke-test\"}");
+    HttpResponse<String> response = request("PATCH", user1Uuid, "{\"uiPreferences.stylesheet\": \"smoke-test\"}");
     Assertions.assertEquals(200, response.statusCode());
     JsonNode user = JsonMapper.STRICT_MAPPER.readTree(response.body());
     Assertions.assertEquals("smoke-test", user.at("/uiPreferences/stylesheet").asText());
   }
 
+  /**
+   * A preference change used to be a PUT. The route now takes PATCH alone, and a PUT is refused as
+   * a method the route does not allow, leaving the profile unchanged.
+   */
+  @Test
+  public void aPutToTheProfileIsNotAllowed() throws Exception {
+    String before = send("GET", "/users/" + user1Uuid, null).body();
+    HttpResponse<String> response = request("PUT", user1Uuid, "{\"uiPreferences.stylesheet\": \"put-test\"}");
+    Assertions.assertEquals(405, response.statusCode(), response.body());
+    Assertions.assertEquals(before, send("GET", "/users/" + user1Uuid, null).body(),
+        "the refused PUT must have left the profile as it was");
+  }
+
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     String before = send("GET", "/users/" + user1Uuid, null).body();
-    HttpResponse<String> response = request("PUT", user1Uuid, "{\"firstName\": \"Changed\"}");
+    HttpResponse<String> response = request("PATCH", user1Uuid, "{\"firstName\": \"Changed\"}");
     Assertions.assertEquals(400, response.statusCode(), response.body());
     Assertions.assertEquals(before, send("GET", "/users/" + user1Uuid, null).body(),
         "the refused change must have left the profile as it was");

@@ -119,7 +119,7 @@ public class CredentialStateMatrixTest {
 
     matrix.when("GET", userPath).accepting(200);
     matrix.when("GET", userPath + "/summary").accepting(200);
-    matrix.when("PUT", userPath, "{\"uiPreferences.stylesheet\": \"credential-matrix\"}").accepting(200);
+    matrix.when("PATCH", userPath, "{\"uiPreferences.stylesheet\": \"credential-matrix\"}").accepting(200);
     matrix.when("POST", userPath + "/api-keys", "{\"description\": \"issued under the matrix\"}").accepting(201);
 
     matrix.verify();

@@ -37,8 +37,8 @@ import org.metadatacenter.util.mongo.MongoUtils;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.ProcessingException;
@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
+import static org.metadatacenter.constant.CedarPathParameters.PP_KEY_ID;
 import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 
 @Path("/users")
@@ -208,7 +209,7 @@ public class UsersResource extends AbstractUserServerResource {
     return Response.ok().entity(summary).build();
   }
 
-  @PUT
+  @PATCH
   @Timed
   @Path("/{id}")
   @Operation(summary = "Patch the current user's UI preferences", description = "Applies the supplied dotted-path "
@@ -363,7 +364,7 @@ public class UsersResource extends AbstractUserServerResource {
   public Response regenerateApiKey(@Parameter(description = "CEDAR user UUID", required = true)
                                    @PathParam(PP_ID) String uuid,
                                    @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
-                                   @PathParam("keyId") String keyId)
+                                   @PathParam(PP_KEY_ID) String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -403,7 +404,7 @@ public class UsersResource extends AbstractUserServerResource {
   public Response deleteApiKey(@Parameter(description = "CEDAR user UUID", required = true)
                                @PathParam(PP_ID) String uuid,
                                @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
-                               @PathParam("keyId") String keyId)
+                               @PathParam(PP_KEY_ID) String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);

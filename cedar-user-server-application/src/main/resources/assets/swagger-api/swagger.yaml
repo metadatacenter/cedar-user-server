@@ -261,7 +261,7 @@ paths:
       summary: Get the current user's profile
       tags:
       - Users
-    put:
+    patch:
       description: "Applies the supplied dotted-path preference changes to the current\
         \ stored profile under a Neo4j write lock. Only uiPreferences fields are accepted,\
         \ and the write cannot overwrite API keys, roles, permissions, identity fields,\

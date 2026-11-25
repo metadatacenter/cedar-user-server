@@ -162,7 +162,7 @@ public class UsersResourceNeo4jTest {
 
   @Test
   public void uiPreferencesPatchRoundTripsThroughTheGraph() throws Exception {
-    HttpResponse<String> updated = request("PUT", "{\"uiPreferences.stylesheet\": \"graph-test\"}");
+    HttpResponse<String> updated = request("PATCH", "{\"uiPreferences.stylesheet\": \"graph-test\"}");
     Assertions.assertEquals(200, updated.statusCode());
 
     HttpResponse<String> readBack = request("GET", null);
@@ -175,21 +175,21 @@ public class UsersResourceNeo4jTest {
     String listing = "{\"resourceTypes\":[\"template\"],\"modified\":\"custom\",\"modifiedAfter\":\"2026-10-01\","
         + "\"modifiedBefore\":\"2026-10-23\",\"version\":\"latest\",\"sortBy\":\"lastUpdatedOnTS\","
         + "\"sortDirection\":\"desc\",\"foldersFirst\":true,\"viewMode\":\"list\"}";
-    HttpResponse<String> updated = request("PUT", "{\"uiPreferences.workspace\": " + listing + "}");
+    HttpResponse<String> updated = request("PATCH", "{\"uiPreferences.workspace\": " + listing + "}");
     Assertions.assertEquals(200, updated.statusCode(), updated.body());
 
     HttpResponse<String> readBack = request("GET", null);
     Assertions.assertEquals(JsonMapper.STRICT_MAPPER.readTree(listing),
         JsonMapper.STRICT_MAPPER.readTree(readBack.body()).at("/uiPreferences/workspace"));
 
-    HttpResponse<String> refused = request("PUT", "{\"uiPreferences.workspace\": {\"viewMode\": \"tiles\"}}");
+    HttpResponse<String> refused = request("PATCH", "{\"uiPreferences.workspace\": {\"viewMode\": \"tiles\"}}");
     Assertions.assertEquals(400, refused.statusCode());
   }
 
   @Test
   public void modificationsOutsideUiPreferencesAreRejected() throws Exception {
     String before = request("GET", null).body();
-    HttpResponse<String> response = request("PUT", "{\"firstName\": \"Changed\"}");
+    HttpResponse<String> response = request("PATCH", "{\"firstName\": \"Changed\"}");
     Assertions.assertEquals(400, response.statusCode(), response.body());
     Assertions.assertEquals(before, request("GET", null).body(),
         "the refused change must have left the profile as it was");
@@ -220,7 +220,7 @@ public class UsersResourceNeo4jTest {
     String user1Path = "/users/" + user1Uuid;
     Assertions.assertAll(
         () -> assertForbiddenForUser2("GET", user1Path, null),
-        () -> assertForbiddenForUser2("PUT", user1Path, "{}"),
+        () -> assertForbiddenForUser2("PATCH", user1Path, "{}"),
         () -> assertForbiddenForUser2("GET", user1Path + "/summary", null),
         () -> assertForbiddenForUser2("POST", user1Path + "/api-keys", "{}"),
         () -> assertForbiddenForUser2("POST", user1Path + "/api-keys/not-the-users-key/regenerate", null),

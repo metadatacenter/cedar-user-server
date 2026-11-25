@@ -390,7 +390,7 @@
         "summary" : "Get the current user's profile",
         "tags" : [ "Users" ]
       },
-      "put" : {
+      "patch" : {
         "description" : "Applies the supplied dotted-path preference changes to the current stored profile under a Neo4j write lock. Only uiPreferences fields are accepted, and the write cannot overwrite API keys, roles, permissions, identity fields, or the home folder. Because this is a field-level atomic patch rather than representation replacement, it does not use If-Match.",
         "operationId" : "updateUser",
         "parameters" : [ {
