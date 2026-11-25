@@ -24,7 +24,7 @@ class OpenApiSuccessContractTest {
     try (InputStream input = getClass().getResourceAsStream("/assets/swagger-api/swagger.json")) {
       OpenApiSuccessContract.assertDescribed(input,
           // regenerateApiKey() identifies the key to rotate by path, and rotates in place.
-          "POST /users/{id}/api-keys/{keyId}/regenerate");
+          "POST /users/{user_id}/api-keys/{id}/regenerate");
     }
   }
 }

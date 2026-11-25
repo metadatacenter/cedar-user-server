@@ -334,7 +334,7 @@
         "description" : "Returns the authenticated user's complete CEDAR profile. A user cannot read another user's profile.",
         "operationId" : "findOwnUser",
         "parameters" : [ {
-          "description" : "CEDAR user UUID",
+          "description" : "CEDAR user UUID, or me for the caller",
           "in" : "path",
           "name" : "id",
           "required" : true,
@@ -394,7 +394,7 @@
         "description" : "Applies the supplied dotted-path preference changes to the current stored profile under a Neo4j write lock. Only uiPreferences fields are accepted, and the write cannot overwrite API keys, roles, permissions, identity fields, or the home folder. Because this is a field-level atomic patch rather than representation replacement, it does not use If-Match.",
         "operationId" : "updateUser",
         "parameters" : [ {
-          "description" : "CEDAR user UUID",
+          "description" : "CEDAR user UUID, or me for the caller",
           "in" : "path",
           "name" : "id",
           "required" : true,
@@ -492,7 +492,7 @@
         "description" : "Atomically appends a newly generated credential to the current stored key list. Concurrent creations are serialized and all successful keys survive. Self-only; a user may hold at most 20 keys. This command does not use If-Match.",
         "operationId" : "createApiKey",
         "parameters" : [ {
-          "description" : "CEDAR user UUID",
+          "description" : "CEDAR user UUID, or me for the caller",
           "in" : "path",
           "name" : "id",
           "required" : true,
@@ -583,14 +583,96 @@
         "tags" : [ "Users" ]
       }
     },
-    "/users/{id}/api-keys/{keyId}" : {
+    "/users/{id}/summary" : {
+      "get" : {
+        "description" : "Returns display and federated-identity information. Self access and authorized administrator access only.",
+        "operationId" : "findUserSummary",
+        "parameters" : [ {
+          "description" : "CEDAR user UUID, or me for the caller",
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "User summary"
+          },
+          "401" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CedarError"
+                }
+              }
+            },
+            "description" : "Unauthorized"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CedarError"
+                }
+              }
+            },
+            "description" : "Forbidden"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CedarError"
+                }
+              }
+            },
+            "description" : "User not found"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CedarError"
+                }
+              }
+            },
+            "description" : "Internal server error"
+          },
+          "503" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CedarError"
+                }
+              }
+            },
+            "description" : "Keycloak is unavailable"
+          }
+        },
+        "security" : [ {
+          "api_key" : [ ]
+        } ],
+        "summary" : "Get a user summary",
+        "tags" : [ "Users" ]
+      }
+    },
+    "/users/{user_id}/api-keys/{id}" : {
       "delete" : {
         "description" : "Atomically removes one key from the current stored key list. Deleting the last enabled key is refused so the account retains a working credential. Self-only. This command does not use If-Match.",
         "operationId" : "deleteApiKey",
         "parameters" : [ {
-          "description" : "CEDAR user UUID",
+          "description" : "CEDAR user UUID, or me for the caller",
           "in" : "path",
-          "name" : "id",
+          "name" : "user_id",
           "required" : true,
           "schema" : {
             "type" : "string"
@@ -598,7 +680,7 @@
         }, {
           "description" : "Stable, non-secret API-key management identifier",
           "in" : "path",
-          "name" : "keyId",
+          "name" : "id",
           "required" : true,
           "schema" : {
             "type" : "string"
@@ -673,14 +755,14 @@
         "tags" : [ "Users" ]
       }
     },
-    "/users/{id}/api-keys/{keyId}/regenerate" : {
+    "/users/{user_id}/api-keys/{id}/regenerate" : {
       "post" : {
         "description" : "Atomically replaces one key's secret and creation time while preserving its stable management identifier and metadata. The previous secret is immediately revoked. Self-only. This command does not use If-Match.",
         "operationId" : "regenerateApiKey",
         "parameters" : [ {
-          "description" : "CEDAR user UUID",
+          "description" : "CEDAR user UUID, or me for the caller",
           "in" : "path",
-          "name" : "id",
+          "name" : "user_id",
           "required" : true,
           "schema" : {
             "type" : "string"
@@ -688,7 +770,7 @@
         }, {
           "description" : "Stable, non-secret API-key management identifier",
           "in" : "path",
-          "name" : "keyId",
+          "name" : "id",
           "required" : true,
           "schema" : {
             "type" : "string"
@@ -750,88 +832,6 @@
           "api_key" : [ ]
         } ],
         "summary" : "Regenerate an API key",
-        "tags" : [ "Users" ]
-      }
-    },
-    "/users/{id}/summary" : {
-      "get" : {
-        "description" : "Returns display and federated-identity information. Self access and authorized administrator access only.",
-        "operationId" : "findUserSummary",
-        "parameters" : [ {
-          "description" : "CEDAR user UUID",
-          "in" : "path",
-          "name" : "id",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
-        "responses" : {
-          "200" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            },
-            "description" : "User summary"
-          },
-          "401" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CedarError"
-                }
-              }
-            },
-            "description" : "Unauthorized"
-          },
-          "403" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CedarError"
-                }
-              }
-            },
-            "description" : "Forbidden"
-          },
-          "404" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CedarError"
-                }
-              }
-            },
-            "description" : "User not found"
-          },
-          "500" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CedarError"
-                }
-              }
-            },
-            "description" : "Internal server error"
-          },
-          "503" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CedarError"
-                }
-              }
-            },
-            "description" : "Keycloak is unavailable"
-          }
-        },
-        "security" : [ {
-          "api_key" : [ ]
-        } ],
-        "summary" : "Get a user summary",
         "tags" : [ "Users" ]
       }
     }

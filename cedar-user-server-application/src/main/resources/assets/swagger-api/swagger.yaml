@@ -225,7 +225,7 @@ paths:
         cannot read another user's profile.
       operationId: findOwnUser
       parameters:
-      - description: CEDAR user UUID
+      - description: "CEDAR user UUID, or me for the caller"
         in: path
         name: id
         required: true
@@ -269,7 +269,7 @@ paths:
         \ representation replacement, it does not use If-Match."
       operationId: updateUser
       parameters:
-      - description: CEDAR user UUID
+      - description: "CEDAR user UUID, or me for the caller"
         in: path
         name: id
         required: true
@@ -339,7 +339,7 @@ paths:
         use If-Match.
       operationId: createApiKey
       parameters:
-      - description: CEDAR user UUID
+      - description: "CEDAR user UUID, or me for the caller"
         in: path
         name: id
         required: true
@@ -397,129 +397,13 @@ paths:
       summary: Create an API key
       tags:
       - Users
-  /users/{id}/api-keys/{keyId}:
-    delete:
-      description: Atomically removes one key from the current stored key list. Deleting
-        the last enabled key is refused so the account retains a working credential.
-        Self-only. This command does not use If-Match.
-      operationId: deleteApiKey
-      parameters:
-      - description: CEDAR user UUID
-        in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      - description: "Stable, non-secret API-key management identifier"
-        in: path
-        name: keyId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarUser"
-          description: The updated user profile
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Deleting the key would leave no enabled credential
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Unauthorized
-        "403":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Another user's keys were targeted
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: User or key not found
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Internal server error
-      security:
-      - api_key: []
-      summary: Delete an API key
-      tags:
-      - Users
-  /users/{id}/api-keys/{keyId}/regenerate:
-    post:
-      description: Atomically replaces one key's secret and creation time while preserving
-        its stable management identifier and metadata. The previous secret is immediately
-        revoked. Self-only. This command does not use If-Match.
-      operationId: regenerateApiKey
-      parameters:
-      - description: CEDAR user UUID
-        in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      - description: "Stable, non-secret API-key management identifier"
-        in: path
-        name: keyId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarUser"
-          description: "The updated user profile, including the rotated key"
-        "401":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Unauthorized
-        "403":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Another user's keys were targeted
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: User or key not found
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CedarError"
-          description: Internal server error
-      security:
-      - api_key: []
-      summary: Regenerate an API key
-      tags:
-      - Users
   /users/{id}/summary:
     get:
       description: Returns display and federated-identity information. Self access
         and authorized administrator access only.
       operationId: findUserSummary
       parameters:
-      - description: CEDAR user UUID
+      - description: "CEDAR user UUID, or me for the caller"
         in: path
         name: id
         required: true
@@ -565,6 +449,122 @@ paths:
       security:
       - api_key: []
       summary: Get a user summary
+      tags:
+      - Users
+  /users/{user_id}/api-keys/{id}:
+    delete:
+      description: Atomically removes one key from the current stored key list. Deleting
+        the last enabled key is refused so the account retains a working credential.
+        Self-only. This command does not use If-Match.
+      operationId: deleteApiKey
+      parameters:
+      - description: "CEDAR user UUID, or me for the caller"
+        in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+      - description: "Stable, non-secret API-key management identifier"
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: The updated user profile
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Deleting the key would leave no enabled credential
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Another user's keys were targeted
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: User or key not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Delete an API key
+      tags:
+      - Users
+  /users/{user_id}/api-keys/{id}/regenerate:
+    post:
+      description: Atomically replaces one key's secret and creation time while preserving
+        its stable management identifier and metadata. The previous secret is immediately
+        revoked. Self-only. This command does not use If-Match.
+      operationId: regenerateApiKey
+      parameters:
+      - description: "CEDAR user UUID, or me for the caller"
+        in: path
+        name: user_id
+        required: true
+        schema:
+          type: string
+      - description: "Stable, non-secret API-key management identifier"
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarUser"
+          description: "The updated user profile, including the rotated key"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Another user's keys were targeted
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: User or key not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CedarError"
+          description: Internal server error
+      security:
+      - api_key: []
+      summary: Regenerate an API key
       tags:
       - Users
 components:

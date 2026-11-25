@@ -115,8 +115,9 @@ public class UsersResourceTest {
     return endpoints.stream().flatMap(endpoint -> Stream.of(false, true).map(invalidCredential ->
         DynamicTest.dynamicTest(endpoint.key() + (invalidCredential ? " / invalid user" : " / missing user"), () -> {
           // Use actual UUID-shaped path parameters so a binding error cannot stand in for auth.
-          String path = endpoint.fullPath.replace("{id}", user1Uuid)
-              .replace("{keyId}", "00000000-0000-0000-0000-000000000000");
+          String path = endpoint.fullPath.contains("{user_id}")
+              ? endpoint.fullPath.replace("{user_id}", user1Uuid).replace("{id}", "00000000-0000-0000-0000-000000000000")
+              : endpoint.fullPath.replace("{id}", user1Uuid);
           HttpRequest.Builder builder = HttpRequest.newBuilder()
               .uri(URI.create("http://127.0.0.1:" + SERVER.getLocalPort() + path))
               .timeout(Duration.ofSeconds(5))
@@ -361,6 +362,31 @@ public class UsersResourceTest {
     HttpResponse<String> response = send("DELETE", ownKeysPath() + "/nosuchkeyid", null);
     Assertions.assertEquals(404, response.statusCode(), response.body());
     Assertions.assertFalse(response.body().contains("nosuchkeyid"), response.body());
+  }
+
+  @Test
+  public void mePathsIdentifyTheCaller() throws Exception {
+    HttpResponse<String> profile = send("GET", "/users/me", null);
+    Assertions.assertEquals(200, profile.statusCode(), profile.body());
+    String ownId = JsonMapper.STRICT_MAPPER.readTree(send("GET", "/users/" + user1Uuid, null).body()).path("@id").asText();
+    Assertions.assertTrue(ownId.endsWith("/" + user1Uuid), ownId);
+    Assertions.assertEquals(ownId, JsonMapper.STRICT_MAPPER.readTree(profile.body()).path("@id").asText(), profile.body());
+
+    HttpResponse<String> created = send("POST", "/users/me/api-keys", "{\"description\": \"through me\"}");
+    Assertions.assertEquals(201, created.statusCode(), created.body());
+    List<String> values = keyValues(created.body());
+    String keyId = keyIdForValue(created.body(), values.get(values.size() - 1));
+    Assertions.assertEquals(200, send("POST", "/users/me/api-keys/" + keyId + "/regenerate", null).statusCode());
+    Assertions.assertEquals(200, send("DELETE", "/users/me/api-keys/" + keyId, null).statusCode());
+    Assertions.assertEquals(values.size() - 1, keyValues(send("GET", "/users/me", null).body()).size());
+  }
+
+  @Test
+  public void anAnonymousMeIsRefusedWith401() throws Exception {
+    HttpResponse<String> response = CLIENT.send(HttpRequest.newBuilder()
+        .uri(URI.create("http://localhost:" + SERVER.getLocalPort() + "/users/me")).GET().build(),
+        HttpResponse.BodyHandlers.ofString());
+    Assertions.assertEquals(401, response.statusCode(), response.body());
   }
 
   /**

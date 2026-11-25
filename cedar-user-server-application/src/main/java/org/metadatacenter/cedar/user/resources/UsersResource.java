@@ -21,6 +21,7 @@ import org.metadatacenter.error.CedarErrorKey;
 import org.metadatacenter.exception.CedarDependencyUnavailableException;
 import org.metadatacenter.exception.CedarException;
 import org.metadatacenter.id.CedarUserId;
+import org.metadatacenter.model.CedarResourceType;
 import org.metadatacenter.rest.context.CedarRequestContext;
 import org.metadatacenter.server.result.BackendCallResult;
 import org.metadatacenter.server.security.KeycloakUtilInfo;
@@ -56,7 +57,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.metadatacenter.constant.CedarPathParameters.PP_ID;
-import static org.metadatacenter.constant.CedarPathParameters.PP_KEY_ID;
+import static org.metadatacenter.constant.CedarPathParameters.PP_USER_ID;
 import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 
 @Path("/users")
@@ -66,6 +67,7 @@ import static org.metadatacenter.rest.assertion.GenericAssertions.LoggedIn;
 public class UsersResource extends AbstractUserServerResource {
 
   private static final int MAX_API_KEYS = 20;
+  private static final String ME = "me";
 
   private static UserService userService;
   private KeycloakUtilInfo kcInfo;
@@ -93,7 +95,7 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "403", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Another user's profile was requested"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response findOwnUser(@Parameter(description = "CEDAR user UUID", required = true)
+  public Response findOwnUser(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
                               @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
@@ -101,7 +103,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     CedarUser currentUser = c.getCedarUser();
 
-    String id = linkedDataUtil.getUserId(uuid);
+    String id = userIdOf(uuid, currentUser);
 
     if (!id.equals(currentUser.getId())) {
       return CedarResponse.forbidden()
@@ -133,14 +135,14 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "503", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Keycloak is unavailable"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response findUserSummary(@Parameter(description = "CEDAR user UUID", required = true)
+  public Response findUserSummary(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
                                   @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
     c.must(c.user()).be(LoggedIn);
 
-    String id = linkedDataUtil.getUserId(uuid);
     CedarUser currentUser = c.getCedarUser();
+    String id = userIdOf(uuid, currentUser);
 
     // Self, or a user administrator. USER_READ belongs to the userAdministrator role, which the
     // built-in admin holds and an ordinary user does not, so this admits the provenance display-name
@@ -171,7 +173,8 @@ public class UsersResource extends AbstractUserServerResource {
 
     UserRepresentation keyCloakUserRepresentation;
     try {
-      UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users().get(uuid);
+      UserResource userResource = kc.realm(kcInfo.getKeycloakRealmName()).users()
+          .get(linkedDataUtil.getUUID(id, CedarResourceType.USER));
       keyCloakUserRepresentation = userResource.toRepresentation();
     } catch (NotFoundException e) {
       // Keycloak reports an unknown user by throwing, which left through the generic mapper as a
@@ -231,7 +234,7 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User not found"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response updateUser(@Parameter(description = "CEDAR user UUID", required = true)
+  public Response updateUser(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
                              @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
 
@@ -239,7 +242,7 @@ public class UsersResource extends AbstractUserServerResource {
 
     CedarUser currentUser = c.getCedarUser();
 
-    String id = linkedDataUtil.getUserId(uuid);
+    String id = userIdOf(uuid, currentUser);
 
     if (!id.equals(currentUser.getId())) {
       return CedarResponse.forbidden()
@@ -294,7 +297,7 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User not found"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response createApiKey(@Parameter(description = "CEDAR user UUID", required = true)
+  public Response createApiKey(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
                                @PathParam(PP_ID) String uuid) throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -340,7 +343,7 @@ public class UsersResource extends AbstractUserServerResource {
   }
 
   /**
-   * Regenerates a single API key: the key identified by its non-secret {@code keyId} in the path keeps its
+   * Regenerates a single API key: the key the path identifies by its non-secret identifier keeps its
    * description / service name / enabled flag but gets a brand new, random value (and a fresh
    * creation date), so the old value is immediately revoked. The key count is unchanged, so this
    * is always safe - it is the way to "rotate" the last remaining key without dropping below one.
@@ -349,7 +352,7 @@ public class UsersResource extends AbstractUserServerResource {
    */
   @POST
   @Timed
-  @Path("/{id}/api-keys/{keyId}/regenerate")
+  @Path("/{user_id}/api-keys/{id}/regenerate")
   @Operation(summary = "Regenerate an API key", description = "Atomically replaces one key's secret and creation "
       + "time while preserving its stable management identifier and metadata. The previous secret is immediately "
       + "revoked. Self-only. This command does not use If-Match.")
@@ -361,10 +364,10 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User or key not found"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response regenerateApiKey(@Parameter(description = "CEDAR user UUID", required = true)
-                                   @PathParam(PP_ID) String uuid,
+  public Response regenerateApiKey(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
+                                   @PathParam(PP_USER_ID) String uuid,
                                    @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
-                                   @PathParam(PP_KEY_ID) String keyId)
+                                   @PathParam(PP_ID) String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -388,7 +391,7 @@ public class UsersResource extends AbstractUserServerResource {
    */
   @DELETE
   @Timed
-  @Path("/{id}/api-keys/{keyId}")
+  @Path("/{user_id}/api-keys/{id}")
   @Operation(summary = "Delete an API key", description = "Atomically removes one key from the current stored key "
       + "list. Deleting the last enabled key is refused so the account retains a working credential. Self-only. "
       + "This command does not use If-Match.")
@@ -401,10 +404,10 @@ public class UsersResource extends AbstractUserServerResource {
       @ApiResponse(responseCode = "404", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "User or key not found"),
       @ApiResponse(responseCode = "500", content = @Content(schema = @Schema(implementation = CedarError.class)), description = "Internal server error")
   })
-  public Response deleteApiKey(@Parameter(description = "CEDAR user UUID", required = true)
-                               @PathParam(PP_ID) String uuid,
+  public Response deleteApiKey(@Parameter(description = "CEDAR user UUID, or me for the caller", required = true)
+                               @PathParam(PP_USER_ID) String uuid,
                                @Parameter(description = "Stable, non-secret API-key management identifier", required = true)
-                               @PathParam(PP_KEY_ID) String keyId)
+                               @PathParam(PP_ID) String keyId)
       throws CedarException {
     CedarRequestContext c = buildRequestContext();
     c.must(c.user()).be(LoggedIn);
@@ -421,10 +424,18 @@ public class UsersResource extends AbstractUserServerResource {
   }
 
   /**
+   * The user a path identifies: the caller for {@code me}, otherwise the user with that UUID. A route
+   * resolves it only after it has refused an anonymous caller.
+   */
+  private String userIdOf(String uuid, CedarUser currentUser) {
+    return ME.equals(uuid) ? currentUser.getId() : linkedDataUtil.getUserId(uuid);
+  }
+
+  /**
    * Returns a 403 response when {@code uuid} does not identify the current user; otherwise null.
    */
   private Response forbiddenIfNotSelf(String uuid, CedarUser currentUser) {
-    String id = linkedDataUtil.getUserId(uuid);
+    String id = userIdOf(uuid, currentUser);
     if (!id.equals(currentUser.getId())) {
       return CedarResponse.forbidden()
           .id(id)
